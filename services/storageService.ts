@@ -49,24 +49,24 @@ const saveList = <T>(key: string, list: T[]) => {
 
 // --- LOGGING SYSTEM ---
 const getUserName = () => {
-    const user = getCurrentUser();
-    return user ? user.name : 'Sistema';
+  const user = getCurrentUser();
+  return user ? user.name : 'Sistema';
 };
 
 const createLog = (serviceId: string, action: 'CRIACAO' | 'EDICAO' | 'EXCLUSAO' | 'RESTAURACAO', changes: any = {}) => {
-    const logs = getList<ServiceLog>(STORAGE_KEYS.LOGS);
-    
-    const newLog: ServiceLog = {
-        id: crypto.randomUUID(),
-        serviceId,
-        userName: getUserName(),
-        action,
-        changes,
-        createdAt: new Date().toISOString()
-    };
+  const logs = getList<ServiceLog>(STORAGE_KEYS.LOGS);
 
-    logs.push(newLog);
-    saveList(STORAGE_KEYS.LOGS, logs);
+  const newLog: ServiceLog = {
+    id: crypto.randomUUID(),
+    serviceId,
+    userName: getUserName(),
+    action,
+    changes,
+    createdAt: new Date().toISOString()
+  };
+
+  logs.push(newLog);
+  saveList(STORAGE_KEYS.LOGS, logs);
 };
 
 // --- User / Auth ---
@@ -129,20 +129,20 @@ export const updateUserProfile = async (user: User) => {
 // --- PASSWORD RESET (MODO REAL) ---
 
 export const requestPasswordReset = async (email: string) => {
-    // Se o adapter tiver a função real (Supabase/Firebase), usa ela
-    if (dbAdapter.requestPasswordReset) {
-        return await dbAdapter.requestPasswordReset(email);
-    }
-    // Fallback para LocalStorage (Modo Simulação apenas se não houver nuvem)
-    return { success: true, code: '123456' }; 
+  // Se o adapter tiver a função real (Supabase/Firebase), usa ela
+  if (dbAdapter.requestPasswordReset) {
+    return await dbAdapter.requestPasswordReset(email);
+  }
+  // Fallback para LocalStorage (Modo Simulação apenas se não houver nuvem)
+  return { success: true, code: '123456' };
 };
 
-export const completePasswordReset = async (email: string, code: string, newPass: string) => { 
-    if (dbAdapter.completePasswordReset) {
-        return await dbAdapter.completePasswordReset(email, code, newPass);
-    }
-    // Fallback Local
-    return { success: true }; 
+export const completePasswordReset = async (email: string, code: string, newPass: string) => {
+  if (dbAdapter.completePasswordReset) {
+    return await dbAdapter.completePasswordReset(email, code, newPass);
+  }
+  // Fallback Local
+  return { success: true };
 };
 
 export const registerUser = async (userData: Partial<User>): Promise<{ success: boolean, user?: User, message?: string }> => {
@@ -186,18 +186,18 @@ export const deleteClient = async (id: string) => {
   const clients = await getClients();
   const client = clients.find(c => c.id === id);
   if (client) {
-      client.deletedAt = new Date().toISOString();
-      await dbAdapter.saveClient(client); 
+    client.deletedAt = new Date().toISOString();
+    await dbAdapter.saveClient(client);
   }
 };
 
 export const restoreClient = async (id: string) => {
-    const clients = await getClients();
-    const client = clients.find(c => c.id === id);
-    if (client) {
-        client.deletedAt = undefined;
-        await dbAdapter.saveClient(client);
-    }
+  const clients = await getClients();
+  const client = clients.find(c => c.id === id);
+  if (client) {
+    client.deletedAt = undefined;
+    await dbAdapter.saveClient(client);
+  }
 };
 
 // --- Services ---
@@ -216,90 +216,93 @@ export const getServicesByClient = async (clientId: string): Promise<ServiceReco
 
 export const saveService = async (service: ServiceRecord) => {
   const user = getCurrentUser();
-  if (user) {
-    service.ownerId = user.id;
-    await dbAdapter.saveService(service, user);
-    createLog(service.id, 'CRIACAO', { info: 'Serviço criado inicialmente' });
+  if (!user) {
+    console.error("Tentativa de salvar serviço sem usuário logado.");
+    throw new Error("Usuário não autenticado.");
   }
+
+  service.ownerId = user.id;
+  await dbAdapter.saveService(service, user);
+  createLog(service.id, 'CRIACAO', { info: 'Serviço criado inicialmente' });
 };
 
 export const updateService = async (updatedService: ServiceRecord) => {
   const user = getCurrentUser();
   if (user) {
-      const allServices = await dbAdapter.getServices(user.id);
-      const oldService = allServices.find(s => s.id === updatedService.id);
+    const allServices = await dbAdapter.getServices(user.id);
+    const oldService = allServices.find(s => s.id === updatedService.id);
 
-      if (oldService) {
-          const changes: any = {};
-          
-          if (oldService.cost !== updatedService.cost) changes['Valor'] = { old: oldService.cost, new: updatedService.cost };
-          if (oldService.driverFee !== updatedService.driverFee) changes['Motoboy'] = { old: oldService.driverFee, new: updatedService.driverFee };
-          if (oldService.waitingTime !== updatedService.waitingTime) changes['Espera'] = { old: oldService.waitingTime || 0, new: updatedService.waitingTime || 0 };
-          if (oldService.extraFee !== updatedService.extraFee) changes['Taxa Extra'] = { old: oldService.extraFee || 0, new: updatedService.extraFee || 0 };
-          if (oldService.paid !== updatedService.paid) changes['Pagamento'] = { old: oldService.paid ? 'Pago' : 'Pendente', new: updatedService.paid ? 'Pago' : 'Pendente' };
-          
-          if (JSON.stringify(oldService.pickupAddresses) !== JSON.stringify(updatedService.pickupAddresses)) {
-              changes['Coleta'] = { old: oldService.pickupAddresses.join(', '), new: updatedService.pickupAddresses.join(', ') };
-          }
-          if (JSON.stringify(oldService.deliveryAddresses) !== JSON.stringify(updatedService.deliveryAddresses)) {
-              changes['Entrega'] = { old: oldService.deliveryAddresses.join(', '), new: updatedService.deliveryAddresses.join(', ') };
-          }
+    if (oldService) {
+      const changes: any = {};
 
-          if (Object.keys(changes).length > 0) {
-              createLog(updatedService.id, 'EDICAO', changes);
-          }
+      if (oldService.cost !== updatedService.cost) changes['Valor'] = { old: oldService.cost, new: updatedService.cost };
+      if (oldService.driverFee !== updatedService.driverFee) changes['Motoboy'] = { old: oldService.driverFee, new: updatedService.driverFee };
+      if (oldService.waitingTime !== updatedService.waitingTime) changes['Espera'] = { old: oldService.waitingTime || 0, new: updatedService.waitingTime || 0 };
+      if (oldService.extraFee !== updatedService.extraFee) changes['Taxa Extra'] = { old: oldService.extraFee || 0, new: updatedService.extraFee || 0 };
+      if (oldService.paid !== updatedService.paid) changes['Pagamento'] = { old: oldService.paid ? 'Pago' : 'Pendente', new: updatedService.paid ? 'Pago' : 'Pendente' };
+
+      if (JSON.stringify(oldService.pickupAddresses) !== JSON.stringify(updatedService.pickupAddresses)) {
+        changes['Coleta'] = { old: oldService.pickupAddresses.join(', '), new: updatedService.pickupAddresses.join(', ') };
+      }
+      if (JSON.stringify(oldService.deliveryAddresses) !== JSON.stringify(updatedService.deliveryAddresses)) {
+        changes['Entrega'] = { old: oldService.deliveryAddresses.join(', '), new: updatedService.deliveryAddresses.join(', ') };
       }
 
-      await dbAdapter.updateService(updatedService, user);
+      if (Object.keys(changes).length > 0) {
+        createLog(updatedService.id, 'EDICAO', changes);
+      }
+    }
+
+    await dbAdapter.updateService(updatedService, user);
   }
 };
 
 export const bulkUpdateServices = async (updates: ServiceRecord[]) => {
   const user = getCurrentUser();
-  if(user) {
-      const allServices = await dbAdapter.getServices(user.id);
-      for (const updated of updates) {
-        const oldService = allServices.find(s => s.id === updated.id);
-        if (oldService && oldService.paid !== updated.paid) {
-             createLog(updated.id, 'EDICAO', { 'Pagamento': { old: oldService.paid, new: updated.paid } });
-        }
-        await dbAdapter.updateService(updated, user);
+  if (user) {
+    const allServices = await dbAdapter.getServices(user.id);
+    for (const updated of updates) {
+      const oldService = allServices.find(s => s.id === updated.id);
+      if (oldService && oldService.paid !== updated.paid) {
+        createLog(updated.id, 'EDICAO', { 'Pagamento': { old: oldService.paid, new: updated.paid } });
       }
+      await dbAdapter.updateService(updated, user);
+    }
   }
 };
 
 export const deleteService = async (id: string) => {
   const user = getCurrentUser();
-  const services = await dbAdapter.getServices(user?.id || '', undefined, undefined); 
+  const services = await dbAdapter.getServices(user?.id || '', undefined, undefined);
   const service = services.find(s => s.id === id);
   if (service && user) {
-      service.deletedAt = new Date().toISOString();
-      await dbAdapter.updateService(service, user);
-      createLog(id, 'EXCLUSAO');
+    service.deletedAt = new Date().toISOString();
+    await dbAdapter.updateService(service, user);
+    createLog(id, 'EXCLUSAO');
   }
 };
 
 export const restoreService = async (id: string) => {
-    const user = getCurrentUser();
-    const allServicesData = localStorage.getItem(STORAGE_KEYS.SERVICES);
-    const allServices: ServiceRecord[] = allServicesData ? JSON.parse(allServicesData) : [];
-    
-    const serviceIndex = allServices.findIndex(s => s.id === id);
-    if (serviceIndex >= 0) {
-        const service = allServices[serviceIndex];
-        service.deletedAt = undefined;
-        await dbAdapter.updateService(service, user!); 
-        createLog(id, 'RESTAURACAO');
-    }
+  const user = getCurrentUser();
+  const allServicesData = localStorage.getItem(STORAGE_KEYS.SERVICES);
+  const allServices: ServiceRecord[] = allServicesData ? JSON.parse(allServicesData) : [];
+
+  const serviceIndex = allServices.findIndex(s => s.id === id);
+  if (serviceIndex >= 0) {
+    const service = allServices[serviceIndex];
+    service.deletedAt = undefined;
+    await dbAdapter.updateService(service, user!);
+    createLog(id, 'RESTAURACAO');
+  }
 };
 
 export const getServiceLogs = async (serviceId: string): Promise<ServiceLog[]> => {
-    if (dbAdapter.getServiceLogs) {
-        const adapterLogs = await dbAdapter.getServiceLogs(serviceId);
-        if(adapterLogs.length > 0) return adapterLogs;
-    }
-    const logs = getList<ServiceLog>(STORAGE_KEYS.LOGS);
-    return logs.filter(l => l.serviceId === serviceId).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  if (dbAdapter.getServiceLogs) {
+    const adapterLogs = await dbAdapter.getServiceLogs(serviceId);
+    if (adapterLogs.length > 0) return adapterLogs;
+  }
+  const logs = getList<ServiceLog>(STORAGE_KEYS.LOGS);
+  return logs.filter(l => l.serviceId === serviceId).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 };
 
 // --- Expenses ---
@@ -330,12 +333,12 @@ export const saveDatabaseConnection = (conn: DatabaseConnection) => {
   saveList(STORAGE_KEYS.DB_CONNECTIONS, list);
 };
 export const updateDatabaseConnection = (conn: DatabaseConnection) => {
-    const list = getList<DatabaseConnection>(STORAGE_KEYS.DB_CONNECTIONS);
-    const index = list.findIndex(c => c.id === conn.id);
-    if (index !== -1) { list[index] = conn; saveList(STORAGE_KEYS.DB_CONNECTIONS, list); }
+  const list = getList<DatabaseConnection>(STORAGE_KEYS.DB_CONNECTIONS);
+  const index = list.findIndex(c => c.id === conn.id);
+  if (index !== -1) { list[index] = conn; saveList(STORAGE_KEYS.DB_CONNECTIONS, list); }
 };
 export const deleteDatabaseConnection = (id: string) => {
-    const list = getList<DatabaseConnection>(STORAGE_KEYS.DB_CONNECTIONS);
-    saveList(STORAGE_KEYS.DB_CONNECTIONS, list.filter(c => c.id !== id));
+  const list = getList<DatabaseConnection>(STORAGE_KEYS.DB_CONNECTIONS);
+  saveList(STORAGE_KEYS.DB_CONNECTIONS, list.filter(c => c.id !== id));
 };
-export const performCloudBackup = async () => {};
+export const performCloudBackup = async () => { };

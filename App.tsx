@@ -3,12 +3,12 @@ import { Routes, Route, Navigate, useNavigate, useParams } from 'react-router-do
 import { Toaster } from 'sonner';
 import { EyeOff } from 'lucide-react';
 import { User, Client, ServiceRecord, ExpenseRecord } from './types';
-import { 
-  initializeData, 
-  getClients, 
-  getServices, 
-  getExpenses, 
-  getCurrentUser, 
+import {
+  initializeData,
+  getClients,
+  getServices,
+  getExpenses,
+  getCurrentUser,
   logoutUser,
   refreshUserSession // <--- IMPORTADO
 } from './services/storageService';
@@ -69,10 +69,10 @@ function App() {
       try {
         // 1. Atualiza o perfil do utilizador (puxa da nuvem para ter os dados da empresa)
         const freshUser = await refreshUserSession();
-        
+
         // Se houver diferenças (ex: mudou o nome da empresa noutro PC), atualiza o estado
         if (freshUser && JSON.stringify(freshUser) !== JSON.stringify(currentUser)) {
-            setCurrentUser(freshUser);
+          setCurrentUser(freshUser);
         }
 
         // 2. Busca os outros dados
@@ -112,12 +112,24 @@ function App() {
   // Impersonation Logic
   const startImpersonation = (targetUser: User) => {
     if (currentUser?.role !== 'ADMIN') return;
-    setRealAdminUser(currentUser); // Save the admin
-    setCurrentUser(targetUser); // Switch view to target
+
+    // 1. Salvar o admin real para poder voltar depois
+    setRealAdminUser(currentUser);
+
+    // 2. Atualizar a sessão no LocalStorage para que o storageService (e os logs) 
+    // "pensem" que somos o usuário alvo.
+    localStorage.setItem('logitrack_session', JSON.stringify(targetUser));
+
+    // 3. Atualizar o estado visual
+    setCurrentUser(targetUser);
   };
 
   const stopImpersonation = () => {
     if (realAdminUser) {
+      // 1. Restaurar a sessão do Admin no LocalStorage
+      localStorage.setItem('logitrack_session', JSON.stringify(realAdminUser));
+
+      // 2. Restaurar os estados
       setCurrentUser(realAdminUser);
       setRealAdminUser(null);
     }
@@ -141,10 +153,7 @@ function App() {
     const navigate = useNavigate();
     return (
       <NewOrder
-        clients={clients}
-        onSave={() => { refreshData(); navigate('/clients'); }}
-        onCancel={() => navigate('/')}
-        currentUserId={currentUser!.id}
+        currentUser={currentUser!}
       />
     );
   };
