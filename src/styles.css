@@ -45,3 +45,12 @@
         transform: translateY(0);
     }
 }
+
+/* --- GLOBAL FIX: ÍCONE DE CALENDÁRIO NO MODO DARK --- */
+/* Isso aplica a correção em TODAS as telas do sistema automaticamente */
+.dark input[type="date"]::-webkit-calendar-picker-indicator,
+.dark input[type="time"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+    cursor: pointer;
+    opacity: 1;
+}
