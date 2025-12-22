@@ -46,11 +46,19 @@
     }
 }
 
-/* --- GLOBAL FIX: ÍCONE DE CALENDÁRIO NO MODO DARK --- */
-/* Isso aplica a correção em TODAS as telas do sistema automaticamente */
+/* --- CORREÇÃO DO ÍCONE DE CALENDÁRIO (MODO DARK) --- */
+
+/* 1. Força o navegador a renderizar o controle em modo escuro nativo */
+/* Isso corrige o ícone e também deixa a janelinha do calendário escura */
+.dark input[type="date"],
+.dark input[type="time"] {
+    color-scheme: dark;
+}
+
+/* 2. Regra de segurança (Fallback) */
+/* Caso o navegador ignore o color-scheme, forçamos a inversão da cor do ícone */
 .dark input[type="date"]::-webkit-calendar-picker-indicator,
 .dark input[type="time"]::-webkit-calendar-picker-indicator {
-    filter: invert(1);
+    filter: invert(1) !important;
     cursor: pointer;
-    opacity: 1;
 }
