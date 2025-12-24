@@ -1,7 +1,29 @@
-// ... imports
+import React, { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { 
+  Trash2, 
+  ChevronRight, 
+  Plus, 
+  Search, 
+  LayoutGrid, 
+  List, 
+  User, 
+  Briefcase, 
+  RotateCcw, 
+  Phone, 
+  MapPin 
+} from 'lucide-react';
+import { toast } from 'sonner';
+import { Client, ServiceRecord, User as UserType } from '../types';
+import { saveClient, deleteClient, restoreClient } from '../services/storageService';
 import { ClientForm } from './ClientForm';
 
-// ... (keep ClientListProps and helper functions if not moved, though I only need ClientListProps)
+interface ClientListProps {
+    clients: Client[];
+    services: ServiceRecord[];
+    currentUser: UserType;
+    onRefresh: () => void;
+}
 
 export const ClientList: React.FC<ClientListProps> = ({ clients, services, currentUser, onRefresh }) => {
     const navigate = useNavigate();
@@ -11,31 +33,31 @@ export const ClientList: React.FC<ClientListProps> = ({ clients, services, curre
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
     const [showTrash, setShowTrash] = useState(false);
 
-    // Removed internal form state (newClient, requestersList, etc.)
-
     const filteredClients = useMemo(() => {
-        // ... existing filter logic
         return clients.filter(c => {
             const isDeleted = !!c.deletedAt;
             if (showTrash && !isDeleted) return false;
             if (!showTrash && isDeleted) return false;
 
             return (
-                c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                c.contactPerson?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                c.cnpj?.includes(searchTerm)
+                (c.name && c.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                (c.contactPerson && c.contactPerson.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                (c.cnpj && c.cnpj.includes(searchTerm))
             );
         });
     }, [clients, searchTerm, showTrash]);
 
     const handleSaveClient = async (clientData: Partial<Client>) => {
         // Validation
-        if (!clientData.name) return;
+        if (!clientData.name) {
+            toast.error("O nome da empresa é obrigatório.");
+            return;
+        }
 
         const clientToSave: Client = {
-            id: crypto.randomUUID(),
+            id: clientData.id || crypto.randomUUID(), // Usa ID existente se for edição, ou cria novo
             ownerId: currentUser.id,
-            name: clientData.name!,
+            name: clientData.name,
             email: clientData.email || '',
             phone: clientData.phone || '',
             category: clientData.category || 'Avulso',
@@ -43,39 +65,51 @@ export const ClientList: React.FC<ClientListProps> = ({ clients, services, curre
             contactPerson: clientData.contactPerson || '',
             requesters: clientData.requesters || [],
             cnpj: clientData.cnpj || '',
-            createdAt: new Date().toISOString()
+            createdAt: clientData.createdAt || new Date().toISOString(),
+            deletedAt: undefined 
         };
 
-        await saveClient(clientToSave);
-        toast.success('Cliente cadastrado com sucesso!');
-
-        setShowModal(false);
-        onRefresh();
+        try {
+            await saveClient(clientToSave);
+            toast.success('Cliente salvo com sucesso!');
+            setShowModal(false);
+            onRefresh();
+        } catch (error) {
+            console.error(error);
+            toast.error("Erro ao salvar cliente.");
+        }
     };
 
     const handleDelete = async (e: React.MouseEvent, id: string) => {
         e.stopPropagation();
         if (confirm("Tem certeza que deseja mover este cliente para a lixeira?")) {
-            await deleteClient(id);
-            toast.success("Cliente movido para lixeira");
-            onRefresh();
+            try {
+                await deleteClient(id);
+                toast.success("Cliente movido para lixeira");
+                onRefresh();
+            } catch (error) {
+                toast.error("Erro ao excluir cliente.");
+            }
         }
     };
 
     const handleRestore = async (e: React.MouseEvent, id: string) => {
         e.stopPropagation();
         if (confirm("Deseja restaurar este cliente?")) {
-            await restoreClient(id);
-            toast.success("Cliente restaurado");
-            onRefresh();
+            try {
+                await restoreClient(id);
+                toast.success("Cliente restaurado");
+                onRefresh();
+            } catch (error) {
+                toast.error("Erro ao restaurar cliente.");
+            }
         }
     };
 
     return (
         <div className="space-y-6 animate-fade-in">
-            {/* Header e Controles (unchanged) */}
+            {/* Header e Controles */}
             <div className="flex flex-col gap-4">
-                {/* ... (existing header code) */}
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div>
                         <h1 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
