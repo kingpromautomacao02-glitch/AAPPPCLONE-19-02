@@ -70,7 +70,7 @@ const ServiceHistoryModal = ({ service, onClose }: { service: ServiceRecord; onC
                     </h3>
                     <button onClick={onClose} className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full"><X size={20} /></button>
                 </div>
-                
+
                 <div className="flex-1 overflow-y-auto p-4 space-y-4">
                     {loading ? (
                         <div className="text-center p-8 text-slate-500"><Loader2 className="animate-spin mx-auto mb-2" /> Carregando...</div>
@@ -79,23 +79,22 @@ const ServiceHistoryModal = ({ service, onClose }: { service: ServiceRecord; onC
                     ) : (
                         logs.map(log => (
                             <div key={log.id} className="relative pl-6 pb-2 border-l-2 border-slate-200 dark:border-slate-700 last:border-0">
-                                <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 border-white dark:border-slate-800 ${
-                                    log.action === 'CRIACAO' ? 'bg-emerald-500' :
+                                <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 border-white dark:border-slate-800 ${log.action === 'CRIACAO' ? 'bg-emerald-500' :
                                     log.action === 'EXCLUSAO' ? 'bg-red-500' :
-                                    log.action === 'RESTAURACAO' ? 'bg-blue-500' :
-                                    'bg-amber-500'
-                                }`}></div>
-                                
+                                        log.action === 'RESTAURACAO' ? 'bg-blue-500' :
+                                            'bg-amber-500'
+                                    }`}></div>
+
                                 <div className="text-xs text-slate-400 mb-1">
                                     {new Date(log.createdAt).toLocaleString()} por <strong>{log.userName}</strong>
                                 </div>
                                 <div className="text-sm font-bold text-slate-800 dark:text-white mb-1">
                                     {log.action === 'CRIACAO' ? 'Serviço Criado' :
-                                     log.action === 'EXCLUSAO' ? 'Serviço Excluído' :
-                                     log.action === 'RESTAURACAO' ? 'Serviço Restaurado' :
-                                     'Alteração Realizada'}
+                                        log.action === 'EXCLUSAO' ? 'Serviço Excluído' :
+                                            log.action === 'RESTAURACAO' ? 'Serviço Restaurado' :
+                                                'Alteração Realizada'}
                                 </div>
-                                
+
                                 {log.changes && Object.keys(log.changes).length > 0 && (
                                     <div className="bg-slate-50 dark:bg-slate-700/50 p-2 rounded text-xs space-y-1">
                                         {Object.entries(log.changes).map(([field, vals]: any) => (
@@ -139,9 +138,9 @@ export const ServiceDocumentModal = ({ service, client, currentUser, onClose }: 
         if (!invoiceRef.current) return null;
 
         const canvas = await html2canvas(invoiceRef.current, {
-            scale: 2, 
+            scale: 2,
             backgroundColor: '#ffffff',
-            useCORS: true, 
+            useCORS: true,
             logging: false,
         });
 
@@ -200,7 +199,7 @@ export const ServiceDocumentModal = ({ service, client, currentUser, onClose }: 
                 }
 
                 const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-                let url = isMobile 
+                let url = isMobile
                     ? `https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(message)}`
                     : `https://web.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(message)}`;
 
@@ -287,7 +286,7 @@ export const ServiceDocumentModal = ({ service, client, currentUser, onClose }: 
                             </div>
                         </div>
 
-                         <div className="mb-12">
+                        <div className="mb-12">
                             <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 mb-3 pb-1">Valores</h2>
                             <div className="flex justify-end">
                                 <div className="w-1/2 space-y-2">
@@ -328,7 +327,7 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client, currentUse
     const topRef = useRef<HTMLDivElement>(null);
 
     const [services, setServices] = useState<ServiceRecord[]>([]);
-    
+
     // Estados para Lixeira e Histórico
     const [showTrash, setShowTrash] = useState(false);
     const [viewingHistoryService, setViewingHistoryService] = useState<ServiceRecord | null>(null);
@@ -352,17 +351,30 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client, currentUse
     const [manualOrderId, setManualOrderId] = useState('');
     const [pickupAddresses, setPickupAddresses] = useState<string[]>(['']);
     const [deliveryAddresses, setDeliveryAddresses] = useState<string[]>(['']);
-    
+
     // Financeiro
-    const [cost, setCost] = useState(''); 
-    const [driverFee, setDriverFee] = useState(''); 
-    const [waitingTime, setWaitingTime] = useState(''); 
-    const [extraFee, setExtraFee] = useState('');       
-    
+    const [cost, setCost] = useState('');
+    const [driverFee, setDriverFee] = useState('');
+    const [waitingTime, setWaitingTime] = useState('');
+    const [extraFee, setExtraFee] = useState('');
+
     const [requester, setRequester] = useState('');
+    const [showRequesterList, setShowRequesterList] = useState(false);
+
+    // --- LÓGICA DE SUGESTÕES ---
+    const requesterSuggestions = useMemo(() => {
+        const historyNames = services
+            .map(s => s.requesterName?.trim())
+            .filter(name => name && name.length > 0);
+
+        const registeredNames = client.requesters || [];
+
+        return Array.from(new Set([...historyNames, ...registeredNames])).sort();
+    }, [services, client.requesters]);
+
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('PIX');
     const [isPaid, setIsPaid] = useState(false);
-    
+
     // Filter State
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
@@ -407,9 +419,9 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client, currentUse
     const handleEditService = (service: ServiceRecord) => {
         setEditingServiceId(service.id);
         setServiceDate(service.date.includes('T') ? service.date.split('T')[0] : service.date);
-        
-        setManualOrderId(service.manualOrderId || ''); 
-        
+
+        setManualOrderId(service.manualOrderId || '');
+
         setPickupAddresses([...service.pickupAddresses]);
         setDeliveryAddresses([...service.deliveryAddresses]);
         setCost(service.cost.toString());
@@ -420,7 +432,7 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client, currentUse
         setPaymentMethod(service.paymentMethod || 'PIX');
         setIsPaid(service.paid);
         setShowForm(true);
-        setActiveTab('services'); 
+        setActiveTab('services');
 
         // --- ROLAGEM AUTOMÁTICA PARA O TOPO (MANTIDO) ---
         setTimeout(() => {
@@ -432,7 +444,7 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client, currentUse
 
     const handleDuplicateService = async (originalService: ServiceRecord) => {
         const confirmCopy = window.confirm(`Deseja repetir o serviço de "${originalService.requesterName}" para a data de HOJE?`);
-        
+
         if (!confirmCopy) return;
 
         try {
@@ -444,10 +456,10 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client, currentUse
                 status: 'PENDING', // Reinicia Status
                 manualOrderId: '', // Limpa o ID manual para não dar conflito (usuário pode editar depois)
             };
-    
+
             await saveService(newService);
             toast.success('Serviço copiado para hoje com sucesso!');
-            
+
             // Atualiza a lista
             const updatedList = await getServicesByClient(client.id);
             setServices(updatedList);
@@ -459,10 +471,10 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client, currentUse
 
     const handleRestoreService = async (service: ServiceRecord) => {
         if (confirm("Deseja restaurar este serviço?")) {
-             await restoreService(service.id);
-             toast.success("Serviço restaurado.");
-             const updatedList = await getServicesByClient(client.id);
-             setServices(updatedList);
+            await restoreService(service.id);
+            toast.success("Serviço restaurado.");
+            const updatedList = await getServicesByClient(client.id);
+            setServices(updatedList);
         }
     };
 
@@ -500,7 +512,7 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client, currentUse
         setRequester('');
         setPaymentMethod('PIX');
         setIsPaid(false);
-        setManualOrderId(''); 
+        setManualOrderId('');
         setServiceDate(getLocalDateStr(new Date()));
         setEditingServiceId(null);
         setShowForm(false);
@@ -521,17 +533,17 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client, currentUse
 
         const serviceData: any = {
             id: editingServiceId || crypto.randomUUID(),
-            ownerId: '', 
+            ownerId: '',
             clientId: client.id,
             pickupAddresses: cleanPickups,
             deliveryAddresses: cleanDeliveries,
             cost: parseFloat(cost),
             driverFee: parseFloat(driverFee) || 0,
-            
+
             waitingTime: parseFloat(waitingTime) || 0,
             extraFee: parseFloat(extraFee) || 0,
-            
-            manualOrderId: manualOrderId.trim(), 
+
+            manualOrderId: manualOrderId.trim(),
 
             requesterName: requester,
             date: serviceDate,
@@ -639,7 +651,7 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client, currentUse
         await bulkUpdateServices(updates);
         const updatedList = await getServicesByClient(client.id);
         setServices(updatedList);
-        setSelectedIds(new Set()); 
+        setSelectedIds(new Set());
     };
 
     const stats = useMemo(() => {
@@ -664,7 +676,7 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client, currentUse
         setTimeout(() => {
             try {
                 const doc = new jsPDF('p', 'mm', 'a4');
-                const pageWidth = doc.internal.pageSize.getWidth(); 
+                const pageWidth = doc.internal.pageSize.getWidth();
                 const marginX = 10;
                 let currentY = 15;
 
@@ -676,7 +688,7 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client, currentUse
                 currentY += 10;
 
                 // Header Box
-                const boxHeight = 25; 
+                const boxHeight = 25;
                 const midPage = pageWidth / 2;
 
                 doc.setDrawColor(200);
@@ -690,13 +702,13 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client, currentUse
                 doc.setFontSize(11);
                 doc.setFont(undefined, 'bold');
                 doc.text(`${client.name.substring(0, 35)}`, marginX + 2, currentY + 6);
-                
+
                 doc.setFontSize(9);
                 doc.setFont(undefined, 'normal');
                 doc.text(`Responsável: ${client.contactPerson || '-'}`, marginX + 2, currentY + 12);
-                
+
                 let periodoTxt = "Todo o histórico";
-                if(startDate && endDate) {
+                if (startDate && endDate) {
                     const d1 = new Date(startDate + 'T00:00:00').toLocaleDateString();
                     const d2 = new Date(endDate + 'T00:00:00').toLocaleDateString();
                     periodoTxt = `${d1} a ${d2}`;
@@ -733,9 +745,9 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client, currentUse
                     const waiting = s.waitingTime || 0;
                     const extra = s.extraFee || 0;
                     const lineTotal = baseCost + waiting + extra;
-                    
-                    const displayOrderId = s.manualOrderId 
-                        ? s.manualOrderId 
+
+                    const displayOrderId = s.manualOrderId
+                        ? s.manualOrderId
                         : '';
 
                     // Formatação profissional dos endereços
@@ -747,13 +759,13 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client, currentUse
 
                     return [
                         new Date(s.date + 'T00:00:00').toLocaleDateString().substring(0, 5), // DD/MM
-                        s.requesterName.substring(0, 15), 
+                        s.requesterName.substring(0, 15),
                         formatAddressList(s.pickupAddresses),
                         formatAddressList(s.deliveryAddresses),
                         waiting > 0 ? `R$ ${waiting.toFixed(2)}` : '-',
                         extra > 0 ? `R$ ${extra.toFixed(2)}` : '-',
-                        `R$ ${baseCost.toFixed(2)}`, 
-                        `R$ ${lineTotal.toFixed(2)}`, 
+                        `R$ ${baseCost.toFixed(2)}`,
+                        `R$ ${lineTotal.toFixed(2)}`,
                         displayOrderId
                     ];
                 });
@@ -762,9 +774,9 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client, currentUse
                     startY: currentY,
                     head: [['DATA', 'SOLICITANTE', 'ORIGEM', 'DESTINO', 'ESPERA', 'TAXA', 'SERVIÇO', 'TOTAL', 'PEDIDO']],
                     body: tableData,
-                    theme: 'plain', 
+                    theme: 'plain',
                     styles: {
-                        fontSize: 7, 
+                        fontSize: 7,
                         cellPadding: 2,
                         textColor: 0,
                         lineColor: 200,
@@ -773,22 +785,22 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client, currentUse
                         overflow: 'linebreak'
                     },
                     headStyles: {
-                        fillColor: [240, 240, 240], 
+                        fillColor: [240, 240, 240],
                         textColor: 0,
                         fontStyle: 'bold',
                         lineWidth: 0.1,
                         lineColor: 200
                     },
                     columnStyles: {
-                        0: { cellWidth: 12 }, 
-                        1: { cellWidth: 20 }, 
+                        0: { cellWidth: 12 },
+                        1: { cellWidth: 20 },
                         2: { cellWidth: 30 },
                         3: { cellWidth: 30 },
-                        4: { cellWidth: 15, halign: 'right' }, 
-                        5: { cellWidth: 15, halign: 'right' }, 
-                        6: { cellWidth: 18, halign: 'right' }, 
-                        7: { cellWidth: 20, halign: 'right' }, 
-                        8: { cellWidth: 20, halign: 'center' } 
+                        4: { cellWidth: 15, halign: 'right' },
+                        5: { cellWidth: 15, halign: 'right' },
+                        6: { cellWidth: 18, halign: 'right' },
+                        7: { cellWidth: 20, halign: 'right' },
+                        8: { cellWidth: 20, halign: 'center' }
                     },
                     margin: { left: marginX, right: marginX }
                 });
@@ -811,7 +823,7 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client, currentUse
 
                 doc.setFontSize(10);
                 doc.setFont(undefined, 'bold');
-                const resumoX = 140; 
+                const resumoX = 140;
                 doc.text("TOTAL DE SERVIÇOS:", resumoX, finalY + 7);
                 doc.text(filteredServices.length.toString(), pageWidth - marginX, finalY + 7, { align: 'right' });
 
@@ -840,12 +852,12 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client, currentUse
         const deliveryHeaders = Array.from({ length: maxDeliveries }, (_, i) => `Entrega ${i + 1}`);
 
         const headers = ['Data', 'Pedido', 'Solicitante', ...pickupHeaders, ...deliveryHeaders, 'Valor Base (R$)', 'Espera (R$)', 'Taxa Extra (R$)', 'Total (R$)', 'Método', 'Pagamento'];
-        
+
         const rows = filteredServices.map(s => {
             const safeString = (str: string) => `"${str.replace(/"/g, '""')}"`;
             const pickupCols = Array.from({ length: maxPickups }, (_, i) => safeString(s.pickupAddresses[i] || ''));
             const deliveryCols = Array.from({ length: maxDeliveries }, (_, i) => safeString(s.deliveryAddresses[i] || ''));
-            
+
             const total = s.cost + (s.waitingTime || 0) + (s.extraFee || 0);
 
             return [
@@ -935,9 +947,9 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client, currentUse
 
             {/* --- ADIÇÃO: MODAL DE HISTÓRICO --- */}
             {viewingHistoryService && (
-                <ServiceHistoryModal 
-                    service={viewingHistoryService} 
-                    onClose={() => setViewingHistoryService(null)} 
+                <ServiceHistoryModal
+                    service={viewingHistoryService}
+                    onClose={() => setViewingHistoryService(null)}
                 />
             )}
 
@@ -951,11 +963,10 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client, currentUse
                     {currentUser.role === 'ADMIN' && (
                         <button
                             onClick={() => setShowTrash(!showTrash)}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-colors ${
-                                showTrash 
-                                    ? 'bg-red-100 text-red-600 border border-red-200' 
-                                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
-                            }`}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-colors ${showTrash
+                                ? 'bg-red-100 text-red-600 border border-red-200'
+                                : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
+                                }`}
                         >
                             {showTrash ? <ArrowLeft size={14} /> : <Archive size={14} />}
                             {showTrash ? 'Voltar aos Ativos' : 'Ver Lixeira'}
@@ -1061,16 +1072,16 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client, currentUse
                         <form onSubmit={(e) => { e.preventDefault(); handleSaveService(e); }} className="bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-700 space-y-6 animate-slide-down">
                             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-700 pb-4 gap-4">
                                 <h3 className="font-bold text-white text-lg">{editingServiceId ? 'Editar Corrida' : 'Registrar Nova Corrida'}</h3>
-                                
+
                                 <div className="flex gap-4 w-full sm:w-auto">
                                     <div className="w-1/2 sm:w-32">
                                         <label className="text-xs text-slate-400 block mb-1 font-bold">Nº Pedido (Op.)</label>
                                         <div className="relative">
                                             <Hash size={14} className="absolute left-2 top-2 text-slate-500" />
-                                            <input 
-                                                type="text" 
-                                                className="w-full pl-7 p-1 bg-slate-800 text-white border border-slate-600 rounded text-sm focus:border-blue-500 outline-none uppercase" 
-                                                value={manualOrderId} 
+                                            <input
+                                                type="text"
+                                                className="w-full pl-7 p-1 bg-slate-800 text-white border border-slate-600 rounded text-sm focus:border-blue-500 outline-none uppercase"
+                                                value={manualOrderId}
                                                 onChange={e => setManualOrderId(e.target.value)}
                                                 placeholder="1234..."
                                             />
@@ -1093,7 +1104,7 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client, currentUse
                                         <div key={idx} className="flex gap-2 relative">
                                             <MapPin size={16} className="absolute left-3 top-3 text-blue-500" />
                                             <input className="w-full pl-9 pr-32 p-2.5 border border-slate-700 rounded-lg bg-slate-800 text-white text-sm focus:border-blue-500 outline-none" value={addr} onChange={e => handleAddressChange('pickup', idx, e.target.value)} placeholder="Endereço de retirada" />
-                                            
+
                                             {/* BOTÃO COLAR ENDEREÇO CLIENTE */}
                                             {client.address && (
                                                 <button
@@ -1118,7 +1129,7 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client, currentUse
                                         <div key={idx} className="flex gap-2 relative">
                                             <MapPin size={16} className="absolute left-3 top-3 text-emerald-500" />
                                             <input className="w-full pl-9 pr-32 p-2.5 border border-slate-700 rounded-lg bg-slate-800 text-white text-sm focus:border-emerald-500 outline-none" value={addr} onChange={e => handleAddressChange('delivery', idx, e.target.value)} placeholder="Endereço de destino" />
-                                            
+
                                             {/* BOTÃO COLAR ENDEREÇO CLIENTE */}
                                             {client.address && (
                                                 <button
@@ -1191,10 +1202,51 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client, currentUse
 
                             {/* Solicitante & Pagamento */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
+                                <div className="relative">
                                     <label className="block text-sm font-bold text-slate-300 mb-1">Solicitante</label>
-                                    <input required className="w-full p-2.5 border border-slate-700 rounded-lg bg-slate-800 text-white focus:ring-2 focus:ring-blue-600 outline-none" value={requester} onChange={e => setRequester(e.target.value)} placeholder="Nome" />
+                                    <div className="flex gap-2">
+                                        <div className="relative flex-1">
+                                            <input
+                                                required
+                                                className="w-full p-2.5 border border-slate-700 rounded-lg bg-slate-800 text-white focus:ring-2 focus:ring-blue-600 outline-none"
+                                                value={requester}
+                                                onChange={e => setRequester(e.target.value)}
+                                                placeholder="Nome do funcionário"
+                                                autoComplete="off"
+                                            />
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowRequesterList(!showRequesterList)}
+                                            className="p-2.5 bg-blue-900/30 text-blue-400 rounded-lg border border-blue-800 hover:bg-blue-800/50 transition-colors"
+                                            title="Ver Lista de Solicitantes"
+                                        >
+                                            <List size={20} />
+                                        </button>
+                                    </div>
+
+                                    {/* DROPDOWN MANUAL (INTERNO) */}
+                                    {showRequesterList && (
+                                        <div className="absolute z-10 w-full bg-slate-800 border border-slate-600 rounded-lg shadow-xl mt-1 max-h-48 overflow-y-auto animate-fade-in custom-scrollbar">
+                                            {requesterSuggestions.length === 0 ? (
+                                                <div className="p-3 text-xs text-slate-400 text-center">Nenhum solicitante encontrado.</div>
+                                            ) : (
+                                                requesterSuggestions.map((name, idx) => (
+                                                    <button
+                                                        key={idx}
+                                                        type="button"
+                                                        onClick={() => { setRequester(name); setShowRequesterList(false); }}
+                                                        className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-700 text-slate-200 border-b border-slate-700 last:border-0 flex items-center gap-2"
+                                                    >
+                                                        <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+                                                        {name}
+                                                    </button>
+                                                ))
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
+
                                 <div className="p-3 border border-slate-700 rounded-xl">
                                     <div className="grid grid-cols-3 gap-2">
                                         {(['PIX', 'CASH', 'CARD'] as PaymentMethod[]).map(m => (
@@ -1203,7 +1255,7 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client, currentUse
                                     </div>
                                 </div>
                             </div>
-                            
+
                             <div className="p-4 border border-slate-700 rounded-xl flex items-center justify-center">
                                 <label className="flex items-center gap-3 cursor-pointer">
                                     <div className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-all ${isPaid ? 'bg-emerald-500 border-emerald-500' : 'border-slate-500'}`}>
@@ -1481,8 +1533,8 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client, currentUse
                             {filteredServices.length === 0 ? (
                                 <tr>
                                     <td colSpan={11} className="p-8 text-center text-slate-500 dark:text-slate-400 font-medium">
-                                        {showTrash 
-                                            ? 'A lixeira está vazia.' 
+                                        {showTrash
+                                            ? 'A lixeira está vazia.'
                                             : (startDate ? 'Nenhuma corrida encontrada no período selecionado.' : 'Nenhuma corrida registrada.')}
                                     </td>
                                 </tr>
@@ -1538,7 +1590,7 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client, currentUse
                                             <td className="p-4 text-slate-700 dark:text-slate-300 align-top font-medium">
                                                 {service.requesterName}
                                             </td>
-                                            
+
                                             {/* VALOR INTERNO (BASE + ESPERA) */}
                                             <td className="p-4 text-right font-bold text-emerald-700 dark:text-emerald-400 align-top">
                                                 R$ {internalTotal.toFixed(2)}
