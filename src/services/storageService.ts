@@ -155,8 +155,17 @@ export const registerUser = async (userData: Partial<User>): Promise<{ success: 
 };
 
 export const loginUser = async (email: string, pass: string): Promise<{ success: boolean, user?: User, message?: string }> => {
-  const users = await dbAdapter.getUsers();
-  const user = users.find(u => u.email === email && u.password === pass);
+  let user: User | null = null;
+
+  if (dbAdapter.login) {
+    // Adapter suporta login seguro (ex: Supabase RPC)
+    user = await dbAdapter.login(email, pass);
+  } else {
+    // Fallback para adapters simples (ex: LocalStorage)
+    const users = await dbAdapter.getUsers();
+    user = users.find(u => u.email === email && u.password === pass) || null;
+  }
+
   if (user) {
     if (user.status === 'BLOCKED') return { success: false, message: 'Conta bloqueada.' };
     localStorage.setItem(STORAGE_KEYS.SESSION, JSON.stringify(user));

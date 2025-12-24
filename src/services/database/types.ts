@@ -35,18 +35,18 @@ export interface ServiceRecord {
   id: string;
   ownerId: string;
   clientId: string;
-  pickupAddresses: string[]; 
-  deliveryAddresses: string[]; 
+  pickupAddresses: string[];
+  deliveryAddresses: string[];
   cost: number;
-  driverFee: number; 
+  driverFee: number;
   requesterName: string;
   date: string;
   notes?: string;
   imageUrl?: string;
-  paid: boolean; 
+  paid: boolean;
   paymentMethod?: PaymentMethod;
   status: ServiceStatus;
-  manualOrderId?: string; 
+  manualOrderId?: string;
   waitingTime?: number;
   extraFee?: number;
   deletedAt?: string; // Soft Delete
@@ -82,7 +82,7 @@ export enum AppView {
   REPORTS = 'REPORTS',
   NEW_ORDER = 'NEW_ORDER',
   ADMIN_PANEL = 'ADMIN_PANEL',
-  SETTINGS = 'SETTINGS', 
+  SETTINGS = 'SETTINGS',
 }
 
 export interface NavState {
@@ -101,4 +101,36 @@ export interface DatabaseConnection {
   apiKey?: string;
   lastBackupStatus: 'SUCCESS' | 'ERROR' | 'PENDING' | 'NEVER';
   lastBackupTime?: string;
+}
+
+export interface DatabaseAdapter {
+  initialize(): Promise<void>;
+
+  // Users
+  getUsers(): Promise<User[]>;
+  saveUser(user: User): Promise<void>;
+  updateUser(user: User): Promise<void>;
+  deleteUser(id: string): Promise<void>;
+  login?(email: string, pass: string): Promise<User | null>; // Novo método para login seguro
+
+  // Password Reset
+  requestPasswordReset?(email: string): Promise<{ success: boolean; message?: string }>;
+  completePasswordReset?(email: string, code: string, newPass: string): Promise<{ success: boolean; message?: string }>;
+
+  // Clients
+  getClients(ownerId: string): Promise<Client[]>;
+  saveClient(client: Client): Promise<void>;
+  deleteClient(id: string): Promise<void>;
+
+  // Services
+  getServices(ownerId: string, start?: string, end?: string, clientId?: string): Promise<ServiceRecord[]>;
+  saveService(service: ServiceRecord, user?: User): Promise<void>;
+  updateService?(service: ServiceRecord, user?: User): Promise<void>;
+  deleteService(id: string, user?: User): Promise<void>;
+  getServiceLogs?(serviceId: string): Promise<ServiceLog[]>;
+
+  // Expenses
+  getExpenses(ownerId: string, start?: string, end?: string): Promise<ExpenseRecord[]>;
+  saveExpense(expense: ExpenseRecord): Promise<void>;
+  deleteExpense(id: string): Promise<void>;
 }

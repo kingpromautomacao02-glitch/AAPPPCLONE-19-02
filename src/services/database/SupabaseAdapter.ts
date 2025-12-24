@@ -27,11 +27,11 @@ export class SupabaseAdapter implements DatabaseAdapter {
     async updateUser(user: User): Promise<void> {
         // Atualiza tabela users
         await this.supabase.from('users').update(user).eq('id', user.id);
-        
+
         // Tenta atualizar a senha no Auth do Supabase também, se possível
         if (user.password) {
             try {
-               await this.supabase.auth.updateUser({ password: user.password });
+                await this.supabase.auth.updateUser({ password: user.password });
             } catch (e) {
                 // Ignora erro se não estiver logado como o próprio usuário
             }
@@ -40,6 +40,20 @@ export class SupabaseAdapter implements DatabaseAdapter {
 
     async deleteUser(id: string): Promise<void> {
         await this.supabase.from('users').delete().eq('id', id);
+    }
+
+    async login(email: string, pass: string): Promise<User | null> {
+        // Tenta usar a função RPC segura para validar credenciais e retornar o usuário
+        const { data, error } = await this.supabase.rpc('login_user', {
+            p_email: email,
+            p_password: pass
+        });
+
+        if (error || !data || (Array.isArray(data) && data.length === 0)) return null;
+
+        // Retorna o primeiro usuário encontrado (deve ser único)
+        const user = Array.isArray(data) ? data[0] : data;
+        return user as User;
     }
 
     // --- Clients ---
@@ -52,7 +66,7 @@ export class SupabaseAdapter implements DatabaseAdapter {
             ownerId: d.owner_id,
             createdAt: d.created_at,
             contactPerson: d.contact_person,
-            deletedAt: d.deleted_at 
+            deletedAt: d.deleted_at
         })) as Client[];
     }
 
@@ -68,7 +82,7 @@ export class SupabaseAdapter implements DatabaseAdapter {
             contact_person: client.contactPerson,
             cnpj: client.cnpj,
             created_at: client.createdAt,
-            deleted_at: client.deletedAt || null 
+            deleted_at: client.deletedAt || null
         };
         await this.supabase.from('clients').upsert(payload);
     }
@@ -79,8 +93,8 @@ export class SupabaseAdapter implements DatabaseAdapter {
 
     // --- LOGS HELPER ---
     private async logAction(serviceId: string, action: string, changes: any, user?: User) {
-        if (!user) return; 
-        
+        if (!user) return;
+
         await this.supabase.from('service_logs').insert({
             service_id: serviceId,
             user_name: user.name || user.email,
@@ -109,7 +123,7 @@ export class SupabaseAdapter implements DatabaseAdapter {
             paymentMethod: d.payment_method,
             paid: d.paid,
             status: d.status,
-            waitingTime: d.waiting_time, 
+            waitingTime: d.waiting_time,
             extraFee: d.extra_fee,
             manualOrderId: d.manual_order_id,
             deletedAt: d.deleted_at
@@ -138,7 +152,7 @@ export class SupabaseAdapter implements DatabaseAdapter {
 
         const { data: existing } = await this.supabase.from('services').select('id').eq('id', service.id).single();
         const { error } = await this.supabase.from('services').upsert(payload);
-        
+
         if (!error && user && !existing) {
             await this.logAction(service.id, 'CRIACAO', { info: 'Serviço criado' }, user);
         }
@@ -146,7 +160,7 @@ export class SupabaseAdapter implements DatabaseAdapter {
 
     async updateService(service: ServiceRecord, user?: User): Promise<void> {
         const { data: oldDataRaw } = await this.supabase.from('services').select('*').eq('id', service.id).single();
-        
+
         const payload = {
             cost: service.cost,
             status: service.status,
@@ -186,14 +200,14 @@ export class SupabaseAdapter implements DatabaseAdapter {
             };
 
             const changes: Record<string, { old: any, new: any }> = {};
-            
+
             if (oldService.cost !== service.cost) changes['Valor'] = { old: oldService.cost, new: service.cost };
             if (oldService.driverFee !== service.driverFee) changes['Pago Motoboy'] = { old: oldService.driverFee, new: service.driverFee };
             if (oldService.requesterName !== service.requesterName) changes['Solicitante'] = { old: oldService.requesterName, new: service.requesterName };
             if (oldService.paid !== service.paid) changes['Status Pagto'] = { old: oldService.paid ? 'Pago' : 'Pendente', new: service.paid ? 'Pago' : 'Pendente' };
             if (JSON.stringify(oldService.pickupAddresses) !== JSON.stringify(service.pickupAddresses)) changes['Endereços Retirada'] = { old: 'Alterado', new: 'Alterado' };
             if (JSON.stringify(oldService.deliveryAddresses) !== JSON.stringify(service.deliveryAddresses)) changes['Endereços Entrega'] = { old: 'Alterado', new: 'Alterado' };
-            
+
             if (!oldService.deletedAt && service.deletedAt) {
                 await this.logAction(service.id, 'EXCLUSAO', { info: 'Movido para lixeira' }, user);
                 return;
@@ -221,7 +235,7 @@ export class SupabaseAdapter implements DatabaseAdapter {
             .order('created_at', { ascending: false });
 
         if (error) return [];
-        
+
         return data.map((l: any) => ({
             id: l.id,
             serviceId: l.service_id,
@@ -259,7 +273,7 @@ export class SupabaseAdapter implements DatabaseAdapter {
     // --- PASSWORD RESET (REAL) ---
     async requestPasswordReset(email: string): Promise<{ success: boolean; message?: string }> {
         // Envia um código OTP para o email do usuário
-        const { error } = await this.supabase.auth.signInWithOtp({ 
+        const { error } = await this.supabase.auth.signInWithOtp({
             email,
             options: { shouldCreateUser: false } // Não cria conta nova, só permite login existente
         });
@@ -281,7 +295,7 @@ export class SupabaseAdapter implements DatabaseAdapter {
         // 2. Se o código for válido, o usuário está logado. Agora atualizamos a senha.
         if (data.user) {
             const { error: updateError } = await this.supabase.auth.updateUser({ password: newPass });
-            
+
             // Também atualiza nossa tabela pública de usuários para manter sincronia
             await this.supabase.from('users').update({ password: newPass }).eq('email', email);
 
