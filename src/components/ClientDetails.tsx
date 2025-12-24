@@ -9,6 +9,7 @@ import autoTable from 'jspdf-autotable';
 // @ts-ignore
 import html2canvas from 'html2canvas';
 import { toast } from 'sonner';
+import { ClientForm } from './ClientForm';
 
 interface ClientDetailsProps {
     client: Client;
@@ -323,7 +324,22 @@ export const ServiceDocumentModal = ({ service, client, currentUser, onClose }: 
 };
 
 
-export const ClientDetails: React.FC<ClientDetailsProps> = ({ client, currentUser, onBack }) => {
+export const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialClient, currentUser, onBack }) => {
+    const [client, setClient] = useState(initialClient); // Estado local para permitir edição sem refresh
+    const [showEditClientModal, setShowEditClientModal] = useState(false);
+
+    useEffect(() => {
+        setClient(initialClient);
+    }, [initialClient]);
+
+    const handleUpdateClient = async (updatedData: Partial<Client>) => {
+        const updatedClient = { ...client, ...updatedData };
+        await saveClient(updatedClient); // saveClient faz update se ID já existe (e ownerId já está lá)
+        setClient(updatedClient);
+        setShowEditClientModal(false);
+        toast.success("Dados do cliente atualizados com sucesso!");
+    };
+
     const topRef = useRef<HTMLDivElement>(null);
 
     const [services, setServices] = useState<ServiceRecord[]>([]);
@@ -953,6 +969,15 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client, currentUse
                 />
             )}
 
+            {/* --- MODAL DE EDIÇÃO DO CLIENTE --- */}
+            {showEditClientModal && (
+                <ClientForm
+                    initialData={client}
+                    onSave={handleUpdateClient}
+                    onCancel={() => setShowEditClientModal(false)}
+                />
+            )}
+
             {/* Header Area */}
             <div className="flex flex-col gap-4">
                 <div className="flex items-center justify-between">
@@ -979,6 +1004,15 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client, currentUse
                         <div>
                             <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-3">
                                 {client.name}
+                                {!showTrash && (
+                                    <button
+                                        onClick={() => setShowEditClientModal(true)}
+                                        className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                                        title="Editar dados do cliente"
+                                    >
+                                        <Pencil size={20} />
+                                    </button>
+                                )}
                                 {showTrash && <span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded-md border border-red-200 uppercase">Lixeira</span>}
                                 <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-md border border-slate-300 dark:border-slate-600">
                                     {client.category}
