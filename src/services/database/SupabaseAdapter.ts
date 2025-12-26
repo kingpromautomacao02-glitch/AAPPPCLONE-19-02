@@ -10,19 +10,20 @@ export class SupabaseAdapter implements DatabaseAdapter {
     }
 
     async initialize() {
-        console.log('Supabase Adapter initialized');
+        console.log('Supabase Adapter Conectado');
     }
 
     // --- USERS ---
+
     async getUsers(): Promise<User[]> {
         const { data, error } = await this.supabase.from('users').select('*');
 
         if (error) {
-            console.error("ERRO AO BUSCAR USUÁRIOS:", error.message, error.details);
+            console.error("Erro ao buscar usuários:", error.message);
             return [];
         }
 
-        // CORREÇÃO: Mapeia snake_case (banco) para camelCase (app)
+        // MAEPEAMENTO: snake_case (banco) -> camelCase (app)
         return data.map((u: any) => ({
             id: u.id,
             name: u.name,
@@ -31,13 +32,14 @@ export class SupabaseAdapter implements DatabaseAdapter {
             phone: u.phone,
             role: u.role,
             status: u.status,
-            companyName: u.company_name,       // << Correção vital
-            companyAddress: u.company_address, // << Correção vital
-            companyCnpj: u.company_cnpj        // << Correção vital
+            companyName: u.company_name,       
+            companyAddress: u.company_address, 
+            companyCnpj: u.company_cnpj
         })) as User[];
     }
 
     async saveUser(user: User): Promise<void> {
+        // MAEPEAMENTO: camelCase (app) -> snake_case (banco)
         const payload = {
             id: user.id,
             name: user.name,
@@ -46,7 +48,7 @@ export class SupabaseAdapter implements DatabaseAdapter {
             phone: user.phone,
             role: user.role,
             status: user.status,
-            company_name: user.companyName,       // << Envia no formato correto
+            company_name: user.companyName,
             company_address: user.companyAddress,
             company_cnpj: user.companyCnpj
         };
@@ -70,19 +72,18 @@ export class SupabaseAdapter implements DatabaseAdapter {
         const { error } = await this.supabase.from('users').update(payload).eq('id', user.id);
         if (error) console.error("Erro ao atualizar usuário:", error.message);
 
+        // Tenta atualizar senha no Auth (se aplicável, falha silenciosamente se não for o user logado)
         if (!error && user.password) {
-            try {
-                await this.supabase.auth.updateUser({ password: user.password });
-            } catch (e) { /* ignora erro de auth */ }
+            try { await this.supabase.auth.updateUser({ password: user.password }); } catch (e) {}
         }
     }
 
     async deleteUser(id: string): Promise<void> {
-        const { error } = await this.supabase.from('users').delete().eq('id', id);
-        if (error) console.error("Erro ao deletar usuário:", error.message);
+        await this.supabase.from('users').delete().eq('id', id);
     }
 
     async login(email: string, pass: string): Promise<User | null> {
+<<<<<<< HEAD
         // Normalização de entrada para evitar erros bobos de espaço ou case
         const cleanEmail = email.trim().toLowerCase(); // Email sempre minúsculo
         const cleanPass = pass.trim();                 // Senha apenas sem espaços nas pontas
@@ -97,10 +98,23 @@ export class SupabaseAdapter implements DatabaseAdapter {
 
         if (error || !data) {
             console.warn(`Login falhou para: ${cleanEmail}. Erro: ${error?.message || 'Credenciais inválidas'}`);
+=======
+        // Busca direta na tabela users
+        // Nota: Requer que a Policy RLS permita leitura pública ou via função RPC
+        const { data, error } = await this.supabase
+            .from('users')
+            .select('*')
+            .eq('email', email)
+            .eq('password', pass) // Em produção, use hash/auth real
+            .single();
+
+        if (error || !data) {
+            console.error("Login falhou:", error?.message);
+>>>>>>> 654817849d3d13cb2eb3b0a7b31a2cce84a9dd9e
             return null;
         }
 
-        // Mapeia o retorno do login também
+        // Mapeia o resultado do login também
         return {
             id: data.id,
             name: data.name,
@@ -116,19 +130,31 @@ export class SupabaseAdapter implements DatabaseAdapter {
     }
 
     // --- CLIENTS ---
-    async getClients(ownerId: string): Promise<Client[]> {
-        const { data, error } = await this.supabase.from('clients').select('*').eq('owner_id', ownerId);
+
+    async getClients(ownerId?: string): Promise<Client[]> {
+        // Se ownerId for fornecido, filtra. Senão (Admin), traz tudo.
+        let query = this.supabase.from('clients').select('*');
+        if (ownerId) query = query.eq('owner_id', ownerId);
+
+        const { data, error } = await query;
         if (error) {
-            console.error("Erro ao buscar clientes:", error.message);
+            console.error("Erro clients:", error.message);
             return [];
         }
 
         return data.map((d: any) => ({
-            ...d,
+            id: d.id,
             ownerId: d.owner_id,
-            createdAt: d.created_at,
-            contactPerson: d.contact_person,
-            deletedAt: d.deleted_at
+            name: d.name,
+            email: d.email,
+            phone: d.phone,
+            category: d.category,
+            address: d.address,
+            contactPerson: d.contact_person, // mapping
+            requesters: d.requesters,
+            cnpj: d.cnpj,
+            createdAt: d.created_at, // mapping
+            deletedAt: d.deleted_at  // mapping
         })) as Client[];
     }
 
@@ -142,12 +168,12 @@ export class SupabaseAdapter implements DatabaseAdapter {
             category: client.category,
             address: client.address,
             contact_person: client.contactPerson,
+            requesters: client.requesters,
             cnpj: client.cnpj,
             created_at: client.createdAt,
             deleted_at: client.deletedAt || null
         };
-        const { error } = await this.supabase.from('clients').upsert(payload);
-        if (error) console.error("Erro ao salvar cliente:", error.message);
+        await this.supabase.from('clients').upsert(payload);
     }
 
     async deleteClient(id: string): Promise<void> {
@@ -155,21 +181,25 @@ export class SupabaseAdapter implements DatabaseAdapter {
     }
 
     // --- SERVICES ---
-    async getServices(ownerId: string, start?: string, end?: string, clientId?: string): Promise<ServiceRecord[]> {
-        let query = this.supabase.from('services').select('*').eq('owner_id', ownerId);
+
+    async getServices(ownerId?: string, start?: string, end?: string): Promise<ServiceRecord[]> {
+        let query = this.supabase.from('services').select('*');
+        
+        if (ownerId) query = query.eq('owner_id', ownerId);
         if (start && end) query = query.gte('date', start).lte('date', end);
-        if (clientId) query = query.eq('client_id', clientId);
 
         const { data, error } = await query;
         if (error) {
-            console.error("Erro ao buscar serviços:", error.message);
+            console.error("Erro services:", error.message);
             return [];
         }
 
         return data.map((d: any) => ({
-            ...d,
+            id: d.id,
             ownerId: d.owner_id,
             clientId: d.client_id,
+            date: d.date,
+            cost: d.cost,
             pickupAddresses: d.pickup_addresses,
             deliveryAddresses: d.delivery_addresses,
             driverFee: d.driver_fee,
@@ -177,8 +207,8 @@ export class SupabaseAdapter implements DatabaseAdapter {
             paymentMethod: d.payment_method,
             paid: d.paid,
             status: d.status,
-            waitingTime: d.waiting_time,
-            extraFee: d.extra_fee,
+            waitingTime: d.waiting_time, // mapping
+            extraFee: d.extra_fee,       // mapping
             manualOrderId: d.manual_order_id,
             deletedAt: d.deleted_at
         })) as ServiceRecord[];
@@ -203,7 +233,6 @@ export class SupabaseAdapter implements DatabaseAdapter {
             manual_order_id: service.manualOrderId,
             deleted_at: service.deletedAt || null
         };
-
         const { error } = await this.supabase.from('services').upsert(payload);
         if (error) console.error("Erro ao salvar serviço:", error.message);
     }
@@ -232,15 +261,23 @@ export class SupabaseAdapter implements DatabaseAdapter {
     }
 
     // --- EXPENSES ---
-    async getExpenses(ownerId: string, start?: string, end?: string): Promise<ExpenseRecord[]> {
-        let query = this.supabase.from('expenses').select('*').eq('owner_id', ownerId);
+
+    async getExpenses(ownerId?: string, start?: string, end?: string): Promise<ExpenseRecord[]> {
+        let query = this.supabase.from('expenses').select('*');
+        if (ownerId) query = query.eq('owner_id', ownerId);
         if (start && end) query = query.gte('date', start).lte('date', end);
+        
         const { data, error } = await query;
-        if (error) {
-            console.error("Erro ao buscar despesas:", error.message);
-            return [];
-        }
-        return (data || []).map((d: any) => ({ ...d, ownerId: d.owner_id })) as ExpenseRecord[];
+        if (error) return [];
+
+        return data.map((d: any) => ({ 
+            id: d.id,
+            ownerId: d.owner_id,
+            category: d.category,
+            amount: d.amount,
+            date: d.date,
+            description: d.description
+        })) as ExpenseRecord[];
     }
 
     async saveExpense(expense: ExpenseRecord): Promise<void> {
@@ -259,7 +296,7 @@ export class SupabaseAdapter implements DatabaseAdapter {
         await this.supabase.from('expenses').delete().eq('id', id);
     }
 
-    // --- MÉTODOS AUXILIARES ---
+    // --- UTILS ---
     async getServiceLogs(serviceId: string): Promise<ServiceLog[]> { return []; }
     async requestPasswordReset(email: string) { return { success: true }; }
     async completePasswordReset(email: string, code: string, newPass: string) { return { success: true }; }

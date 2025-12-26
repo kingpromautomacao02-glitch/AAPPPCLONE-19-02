@@ -10,6 +10,7 @@ interface DashboardProps {
 
 type TimeFrame = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' | 'CUSTOM';
 
+<<<<<<< HEAD
 import { safeParseFloat } from '../utils/numberUtils';
 
 // --- FUNÇÃO DE CONVERSÃO SEGURA PARA NÚMEROS ---
@@ -30,6 +31,12 @@ const getSaoPauloDateStr = (dateInput: Date | string) => {
     const month = String(spDate.getMonth() + 1).padStart(2, '0');
     const day = String(spDate.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
+=======
+const safeFloat = (val: any) => {
+    if (!val) return 0;
+    if (typeof val === 'number') return val;
+    return parseFloat(val.toString().replace('R$', '').replace('.', '').replace(',', '.')) || 0;
+>>>>>>> 654817849d3d13cb2eb3b0a7b31a2cce84a9dd9e
 };
 
 export const Dashboard: React.FC<DashboardProps> = () => {
@@ -39,6 +46,7 @@ export const Dashboard: React.FC<DashboardProps> = () => {
     const [loading, setLoading] = useState(true);
 
     const [timeFrame, setTimeFrame] = useState<TimeFrame>('MONTHLY');
+<<<<<<< HEAD
     const [customStart, setCustomStart] = useState(getSaoPauloDateStr(new Date()));
     const [customEnd, setCustomEnd] = useState(getSaoPauloDateStr(new Date()));
 
@@ -85,30 +93,72 @@ export const Dashboard: React.FC<DashboardProps> = () => {
         }
         return { startStr: s, endStr: e, dateLabel: l };
     }, [timeFrame, customStart, customEnd]);
+=======
+    const [customStart, setCustomStart] = useState(new Date().toISOString().split('T')[0]);
+    const [customEnd, setCustomEnd] = useState(new Date().toISOString().split('T')[0]);
+>>>>>>> 654817849d3d13cb2eb3b0a7b31a2cce84a9dd9e
 
     useEffect(() => {
         const loadData = async () => {
             setLoading(true);
             try {
-                // Carregamento protegido para evitar tela azul se a API falhar
-                const [clientsData, servicesData, expensesData] = await Promise.all([
-                    getClients().catch(() => []),
-                    getServices(startStr, endStr).catch(() => []),
-                    getExpenses(startStr, endStr).catch(() => [])
+                const [allClients, allServices, allExpenses] = await Promise.all([
+                    getClients(),
+                    getServices(), 
+                    getExpenses()
                 ]);
+<<<<<<< HEAD
 
                 setClients(clientsData || []);
                 setServices(servicesData || []);
                 setExpenses(expensesData || []);
+=======
+                setClients(allClients || []);
+                setServices(allServices || []);
+                setExpenses(allExpenses || []);
+>>>>>>> 654817849d3d13cb2eb3b0a7b31a2cce84a9dd9e
             } catch (error) {
-                console.error("Erro ao carregar dados:", error);
+                console.error("Erro ao carregar dashboard:", error);
             } finally {
                 setLoading(false);
             }
         };
-        if (startStr && endStr) {
-            loadData();
+        loadData();
+    }, []);
+
+    const { startDate, endDate, label } = useMemo(() => {
+        const now = new Date();
+        now.setHours(now.getHours() - 3); 
+        const todayStr = now.toISOString().split('T')[0];
+        
+        let start = todayStr, end = todayStr, txt = 'Hoje';
+
+        if (timeFrame === 'DAILY') {
+            start = end = todayStr;
+        } else if (timeFrame === 'WEEKLY') {
+            const day = now.getDay();
+            const diff = now.getDate() - day + (day === 0 ? -6 : 1) - 1;
+            const first = new Date(now.setDate(diff));
+            const last = new Date(now.setDate(diff + 6));
+            start = first.toISOString().split('T')[0];
+            end = last.toISOString().split('T')[0];
+            txt = 'Esta Semana';
+        } else if (timeFrame === 'MONTHLY') {
+            const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+            const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+            start = firstDay.toISOString().split('T')[0];
+            end = lastDay.toISOString().split('T')[0];
+            txt = 'Este Mês';
+        } else if (timeFrame === 'YEARLY') {
+            start = `${now.getFullYear()}-01-01`;
+            end = `${now.getFullYear()}-12-31`;
+            txt = 'Este Ano';
+        } else if (timeFrame === 'CUSTOM') {
+            start = customStart;
+            end = customEnd;
+            txt = 'Personalizado';
         }
+<<<<<<< HEAD
     }, [startStr, endStr]);
 
     const processedData = useMemo(() => {
@@ -135,10 +185,20 @@ export const Dashboard: React.FC<DashboardProps> = () => {
             allExpenses: safeExpenses
         };
     }, [services, expenses]);
+=======
+        return { startDate: start, endDate: end, label: txt };
+    }, [timeFrame, customStart, customEnd]);
+>>>>>>> 654817849d3d13cb2eb3b0a7b31a2cce84a9dd9e
 
     const stats = useMemo(() => {
-        const { revenueServices, pendingServices, allExpenses, activeServices } = processedData;
+        // Filtra serviços pela data e remove excluídos/cancelados
+        const filteredServices = services.filter(s => {
+            if (!s.date || s.deletedAt || s.status === 'Cancelado') return false;
+            const sDate = s.date.split('T')[0];
+            return sDate >= startDate && sDate <= endDate;
+        });
 
+<<<<<<< HEAD
         // --- CÁLCULOS COM CONVERSÃO SEGURA (CORREÇÃO DO FATURAMENTO) ---
 
         // 1. Receita Total = Custo Base + Tempo de Espera
@@ -152,38 +212,73 @@ export const Dashboard: React.FC<DashboardProps> = () => {
         // 3. A Receber = Custo Base + Espera (dos não pagos)
         const totalPending = pendingServices.reduce((sum, s) =>
             sum + safeParseFloat(s.cost) + safeParseFloat(s.waitingTime), 0);
+=======
+        const filteredExpenses = expenses.filter(e => {
+            if (!e.date) return false;
+            const eDate = e.date.split('T')[0];
+            return eDate >= startDate && eDate <= endDate;
+        });
 
-        // Despesas por Categoria
-        const expensesByCat = allExpenses.reduce((acc, curr) => {
-            acc[curr.category] = (acc[curr.category] || 0) + safeParseFloat(curr.amount);
-            return acc;
-        }, {} as Record<string, number>);
+        let totalRevenue = 0; // Faturamento Bruto (Tudo que foi gerado)
+        let totalReceived = 0; // O que realmente entrou no caixa
+        let totalPending = 0; // O que falta receber
+        let totalDriverPay = 0;
+        
+        const revenueByMethod: any = { PIX: 0, CASH: 0, CARD: 0 };
 
-        // Receita por Método
-        const revenueByMethod = revenueServices.reduce((acc, curr) => {
-            const method = curr.paymentMethod || 'PIX';
-            acc[method] = (acc[method] || 0) + safeParseFloat(curr.cost) + safeParseFloat(curr.waitingTime);
-            return acc;
-        }, { PIX: 0, CASH: 0, CARD: 0 } as Record<string, number>);
+        filteredServices.forEach(service => {
+            const val = safeFloat(service.cost) + safeFloat(service.waitingTime);
+            const driver = safeFloat(service.driverFee);
+>>>>>>> 654817849d3d13cb2eb3b0a7b31a2cce84a9dd9e
 
+            // Faturamento Total (Bruto) = Soma de tudo que não foi cancelado
+            totalRevenue += val; 
+            totalDriverPay += driver;
+
+            if (service.paid) {
+                totalReceived += val;
+                const method = service.paymentMethod || 'PIX';
+                revenueByMethod[method] = (revenueByMethod[method] || 0) + val;
+            } else {
+                totalPending += val;
+            }
+        });
+
+<<<<<<< HEAD
         const totalOperationalExpenses = allExpenses.reduce((sum, e) => sum + safeParseFloat(e.amount), 0);
 
         // Lucro Líquido
+=======
+        let totalOperationalExpenses = 0;
+        const expensesByCat: any = {};
+        filteredExpenses.forEach(exp => {
+            const amount = safeFloat(exp.amount);
+            totalOperationalExpenses += amount;
+            expensesByCat[exp.category] = (expensesByCat[exp.category] || 0) + amount;
+        });
+
+        // Lucro Líquido Real = (O que recebeu) - (O que pagou)
+        // Se você quiser Lucro Projetado, troque totalReceived por totalRevenue abaixo
+>>>>>>> 654817849d3d13cb2eb3b0a7b31a2cce84a9dd9e
         const netProfit = totalRevenue - totalDriverPay - totalOperationalExpenses;
 
         return {
             totalRevenue,
+            totalReceived,
             totalPending,
             totalDriverPay,
             totalOperationalExpenses,
             netProfit,
-            expensesByCat,
             revenueByMethod,
-            totalCount: revenueServices.length
+            expensesByCat,
+            filteredServices,
+            filteredExpenses
         };
-    }, [processedData]);
+    }, [services, expenses, startDate, endDate]);
 
+    // Prepara dados do gráfico
     const chartData = useMemo(() => {
+<<<<<<< HEAD
         const { revenueServices, allExpenses } = processedData;
         const dataMap = new Map<string, { name: string, revenue: number, cost: number, profit: number, sortKey: number }>();
 
@@ -237,16 +332,62 @@ export const Dashboard: React.FC<DashboardProps> = () => {
             entry.count += 1;
             entry.revenue += safeParseFloat(s.cost) + safeParseFloat(s.waitingTime);
             clientStats.set(id, entry);
+=======
+        const daysMap = new Map();
+        
+        stats.filteredServices.forEach(s => {
+            const day = s.date.split('T')[0].split('-').slice(1).reverse().join('/');
+            if (!daysMap.has(day)) daysMap.set(day, { name: day, revenue: 0, cost: 0 });
+            
+            const val = safeFloat(s.cost) + safeFloat(s.waitingTime);
+            const driver = safeFloat(s.driverFee);
+            const entry = daysMap.get(day);
+            
+            // No gráfico, mostramos o Faturamento total daquele dia
+            entry.revenue += val; 
+            entry.cost += driver;
+            daysMap.set(day, entry);
+>>>>>>> 654817849d3d13cb2eb3b0a7b31a2cce84a9dd9e
         });
 
-        const sortedByRevenue = Array.from(clientStats.values()).sort((a, b) => b.revenue - a.revenue).slice(0, 5);
-        const sortedByCount = Array.from(clientStats.values()).sort((a, b) => b.count - a.count).slice(0, 5);
+        stats.filteredExpenses.forEach(e => {
+            const day = e.date.split('T')[0].split('-').slice(1).reverse().join('/');
+            if (!daysMap.has(day)) daysMap.set(day, { name: day, revenue: 0, cost: 0 });
+            const entry = daysMap.get(day);
+            entry.cost += safeFloat(e.amount);
+            daysMap.set(day, entry);
+        });
 
-        return { byRevenue: sortedByRevenue, byCount: sortedByCount };
-    }, [processedData, clients]);
+        return Array.from(daysMap.values())
+            .map((v: any) => ({ ...v, profit: v.revenue - v.cost }))
+            .sort((a, b) => {
+                const [d1, m1] = a.name.split('/').map(Number);
+                const [d2, m2] = b.name.split('/').map(Number);
+                return (m1 * 31 + d1) - (m2 * 31 + d2);
+            });
+    }, [stats]);
+
+    const topClients = useMemo(() => {
+        const map = new Map();
+        stats.filteredServices.forEach(s => {
+            const val = safeFloat(s.cost) + safeFloat(s.waitingTime);
+            const name = clients.find(c => c.id === s.clientId)?.name || 'Cliente Removido';
+            if (!map.has(s.clientId)) map.set(s.clientId, { name, revenue: 0, count: 0 });
+            const entry = map.get(s.clientId);
+            entry.revenue += val;
+            entry.count += 1;
+            map.set(s.clientId, entry);
+        });
+        const list = Array.from(map.values());
+        return {
+            byRevenue: [...list].sort((a, b) => b.revenue - a.revenue).slice(0, 5),
+            byCount: [...list].sort((a, b) => b.count - a.count).slice(0, 5)
+        };
+    }, [stats, clients]);
 
     return (
         <div className="space-y-6 animate-fade-in">
+            {/* Header e Filtros */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-2">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
@@ -255,48 +396,43 @@ export const Dashboard: React.FC<DashboardProps> = () => {
                     </h1>
                     <p className="text-slate-500 dark:text-slate-400 text-sm flex items-center gap-1 mt-1">
                         <Calendar size={14} />
+<<<<<<< HEAD
                         Exibindo dados de: <span className="font-bold text-slate-700 dark:text-slate-300">{dateLabel}</span>
                         <span className="ml-2 text-xs bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded text-slate-500">
                             ({stats.totalCount} serviços encontrados)
                         </span>
+=======
+                        Dados de: <span className="font-bold text-slate-700 dark:text-slate-300">{label}</span>
+>>>>>>> 654817849d3d13cb2eb3b0a7b31a2cce84a9dd9e
                     </p>
                 </div>
-
                 <div className="flex bg-white dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm self-start md:self-auto overflow-x-auto max-w-full items-center">
                     {(['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'] as TimeFrame[]).map(tf => (
-                        <button
-                            key={tf}
-                            onClick={() => setTimeFrame(tf)}
-                            className={`px-4 py-2 text-xs sm:text-sm font-bold rounded-md transition-all whitespace-nowrap ${timeFrame === tf ? 'bg-blue-600 text-white shadow-md' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
-                        >
+                        <button key={tf} onClick={() => setTimeFrame(tf)} className={`px-4 py-2 text-xs sm:text-sm font-bold rounded-md transition-all whitespace-nowrap ${timeFrame === tf ? 'bg-blue-600 text-white shadow-md' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
                             {tf === 'DAILY' ? 'Hoje' : tf === 'WEEKLY' ? 'Semana' : tf === 'MONTHLY' ? 'Mês' : 'Ano'}
                         </button>
                     ))}
-                    <button
-                        onClick={() => setTimeFrame('CUSTOM')}
-                        className={`px-4 py-2 text-xs sm:text-sm font-bold rounded-md transition-all whitespace-nowrap flex items-center gap-1 ${timeFrame === 'CUSTOM' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
-                    >
+                    <button onClick={() => setTimeFrame('CUSTOM')} className={`px-4 py-2 text-xs sm:text-sm font-bold rounded-md transition-all whitespace-nowrap flex items-center gap-1 ${timeFrame === 'CUSTOM' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
                         <Filter size={14} /> Personalizado
                     </button>
-
                     {timeFrame === 'CUSTOM' && (
                         <div className="flex items-center gap-2 ml-2 px-2 border-l border-slate-200 dark:border-slate-600">
                             <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} className="p-1 text-xs border border-slate-300 rounded dark:bg-slate-800 dark:text-white" />
                             <span className="text-slate-400">-</span>
-                            <input type="date" value={customEnd.split('T')[0]} onChange={(e) => setCustomEnd(e.target.value)} className="p-1 text-xs border border-slate-300 rounded dark:bg-slate-800 dark:text-white" />
+                            <input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} className="p-1 text-xs border border-slate-300 rounded dark:bg-slate-800 dark:text-white" />
                         </div>
                     )}
                 </div>
             </div>
 
-            {/* CARDS PRINCIPAIS */}
+            {/* Cards Principais */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
                 {[
-                    { title: 'Faturamento', value: stats.totalRevenue, icon: <DollarSign size={48} className="text-blue-600" />, color: 'text-blue-700' },
-                    { title: 'A Receber', value: stats.totalPending, icon: <Clock size={48} className="text-amber-600" />, color: 'text-amber-600', border: 'border-l-4 border-l-amber-400' },
-                    { title: 'Pago aos Motoboys', value: stats.totalDriverPay, icon: <Bike size={48} className="text-red-600" />, color: 'text-red-600' },
-                    { title: 'Despesas', value: stats.totalOperationalExpenses, icon: <Wallet size={48} className="text-orange-600" />, color: 'text-orange-600' },
-                    { title: 'Lucro Líquido', value: stats.netProfit, icon: <TrendingUp size={48} className="text-emerald-600" />, color: stats.netProfit >= 0 ? 'text-emerald-700' : 'text-red-600' }
+                    { title: 'Faturamento Total', value: stats.totalRevenue, icon: <DollarSign size={48} className="text-blue-600" />, color: 'text-blue-700', sub: 'Serviços Prestados' },
+                    { title: 'A Receber', value: stats.totalPending, icon: <Clock size={48} className="text-amber-600" />, color: 'text-amber-600', border: 'border-l-4 border-l-amber-400', sub: 'Pendente' },
+                    { title: 'Pago aos Motoboys', value: stats.totalDriverPay, icon: <Bike size={48} className="text-red-600" />, color: 'text-red-600', sub: 'Comissão' },
+                    { title: 'Despesas', value: stats.totalOperationalExpenses, icon: <Wallet size={48} className="text-orange-600" />, color: 'text-orange-600', sub: 'Operacional' },
+                    { title: 'Lucro Líquido', value: stats.netProfit, icon: <TrendingUp size={48} className="text-emerald-600" />, color: stats.netProfit >= 0 ? 'text-emerald-700' : 'text-red-600', sub: 'Resultado Final' }
                 ].map((card, idx) => (
                     <div key={idx} className={`bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 relative overflow-hidden ${card.border || ''}`}>
                         <div className="absolute top-0 right-0 p-4 opacity-10">{card.icon}</div>
@@ -305,13 +441,14 @@ export const Dashboard: React.FC<DashboardProps> = () => {
                             <h3 className={`text-2xl font-bold ${card.color} dark:${card.color.replace('700', '400')}`}>
                                 R$ {card.value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </h3>
+                            <p className="text-[10px] text-slate-400 mt-1 uppercase font-bold">{card.sub}</p>
                         </div>
                     </div>
                 ))}
             </div>
 
+            {/* Gráfico e Detalhes */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* GRÁFICO */}
                 <div className="lg:col-span-2 bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
                     <h2 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-6">
                         <TrendingUp className="text-slate-500" size={20} /> Evolução Financeira
@@ -338,10 +475,9 @@ export const Dashboard: React.FC<DashboardProps> = () => {
                     </div>
                 </div>
 
-                {/* COLUNA DIREITA */}
                 <div className="flex flex-col gap-6">
                     <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
-                        <h2 className="text-lg font-bold text-slate-800 dark:text-white mb-6">Receitas por Método</h2>
+                        <h2 className="text-lg font-bold text-slate-800 dark:text-white mb-6">Recebido por Método</h2>
                         <div className="space-y-4">
                             {[
                                 { label: 'Dinheiro', val: stats.revenueByMethod['CASH'], icon: <Banknote size={18} />, color: 'text-emerald-700', bg: 'bg-emerald-50' },
