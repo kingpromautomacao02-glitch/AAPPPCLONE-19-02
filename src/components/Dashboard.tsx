@@ -10,7 +10,7 @@ interface DashboardProps {
 
 type TimeFrame = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' | 'CUSTOM';
 
-// --- FUNÇÃO DE DATA CORRIGIDA (Garante final do dia para não perder dados) ---
+// --- FUNÇÃO DE DATA (Sem date-fns para evitar erros de build) ---
 const getSaoPauloDateStr = (dateInput: Date | string, isEndOfDay: boolean = false) => {
     let d: Date;
     if (typeof dateInput === 'string') {
@@ -25,7 +25,7 @@ const getSaoPauloDateStr = (dateInput: Date | string, isEndOfDay: boolean = fals
     const month = String(spDate.getMonth() + 1).padStart(2, '0');
     const day = String(spDate.getDate()).padStart(2, '0');
     
-    // CORREÇÃO CRÍTICA: Se for final do dia, adiciona o horário limite
+    // Se for final do dia, adiciona o horário limite
     if (isEndOfDay) {
         return `${year}-${month}-${day}T23:59:59`;
     }
@@ -53,7 +53,7 @@ export const Dashboard: React.FC<DashboardProps> = () => {
 
         if (timeFrame === 'DAILY') {
             s = getSaoPauloDateStr(now);
-            e = getSaoPauloDateStr(now, true); // Final do dia
+            e = getSaoPauloDateStr(now, true);
             l = 'Hoje';
         } else if (timeFrame === 'WEEKLY') {
             const start = new Date(now);
@@ -64,23 +64,23 @@ export const Dashboard: React.FC<DashboardProps> = () => {
 
             const end = new Date(start);
             end.setDate(start.getDate() + 6); 
-            e = getSaoPauloDateStr(end, true); // Final do dia
+            e = getSaoPauloDateStr(end, true);
             l = 'Esta Semana';
         } else if (timeFrame === 'MONTHLY') {
             const start = new Date(currentYear, currentMonth, 1);
             const end = new Date(currentYear, currentMonth + 1, 0);
             s = getSaoPauloDateStr(start);
-            e = getSaoPauloDateStr(end, true); // Final do dia
+            e = getSaoPauloDateStr(end, true);
             l = 'Este Mês';
         } else if (timeFrame === 'YEARLY') {
             const start = new Date(currentYear, 0, 1);
             const end = new Date(currentYear, 11, 31);
             s = getSaoPauloDateStr(start);
-            e = getSaoPauloDateStr(end, true); // Final do dia
+            e = getSaoPauloDateStr(end, true);
             l = 'Este Ano';
         } else if (timeFrame === 'CUSTOM') {
             s = customStart;
-            e = customEnd.includes('T') ? customEnd : `${customEnd}T23:59:59`; // Garante final do dia no custom
+            e = customEnd.includes('T') ? customEnd : `${customEnd}T23:59:59`;
             l = 'Período Personalizado';
         }
         return { startStr: s, endStr: e, dateLabel: l };
@@ -90,7 +90,7 @@ export const Dashboard: React.FC<DashboardProps> = () => {
         const loadData = async () => {
             setLoading(true);
             try {
-                // Adicionei tratamento para garantir que arrays venham mesmo se vazio
+                // Previne crash se a API falhar
                 const [clientsData, servicesData, expensesData] = await Promise.all([
                     getClients().catch(() => []),
                     getServices(startStr, endStr).catch(() => []),
@@ -111,40 +111,47 @@ export const Dashboard: React.FC<DashboardProps> = () => {
         }
     }, [startStr, endStr]);
 
-    const { filteredServices, filteredExpenses } = useMemo(() => {
-        // Filtra apenas serviços ATIVOS (não deletados) e CONCLUÍDOS para receita
+    // --- CORREÇÃO DO TRAVAMENTO AQUI ---
+    const processedData = useMemo(() => {
+        // Separa os dados corretamente em um objeto único
         return {
-            filteredServices: services.filter(s => !s.deletedAt && s.status === 'Concluído'),
-            // Para Pendentes, precisamos de uma lista separada, calculada abaixo
+            // Serviços Concluídos (para Receita)
+            completedServices: services.filter(s => !s.deletedAt && s.status === 'Concluído'),
+            
+            // Serviços Pendentes de Pagamento (Concluídos mas não pagos)
             pendingServices: services.filter(s => !s.deletedAt && !s.paid && s.status === 'Concluído'),
-            filteredExpenses: expenses
+            
+            // Todas as despesas
+            allExpenses: expenses
         };
     }, [services, expenses]);
 
     const stats = useMemo(() => {
-        // 1. Receita Total (Custo + Espera) - SEM TAXA EXTRA
-        const totalRevenue = filteredServices.filteredServices.reduce((sum, s) => 
+        const { completedServices, pendingServices, allExpenses } = processedData;
+
+        // 1. Receita Total: Custo + Espera (SEM Taxa Extra)
+        const totalRevenue = completedServices.reduce((sum, s) => 
             sum + Number(s.cost || 0) + Number(s.waitingTime || 0), 0);
         
-        const totalDriverPay = filteredServices.filteredServices.reduce((sum, s) => 
+        const totalDriverPay = completedServices.reduce((sum, s) => 
             sum + Number(s.driverFee || 0), 0);
 
-        // 2. A Receber (Pendentes) (Custo + Espera)
-        const totalPending = filteredServices.pendingServices.reduce((sum, s) => 
+        // 2. A Receber: Custo + Espera (SEM Taxa Extra)
+        const totalPending = pendingServices.reduce((sum, s) => 
             sum + Number(s.cost || 0) + Number(s.waitingTime || 0), 0);
 
-        const expensesByCat = filteredExpenses.reduce((acc, curr) => {
+        const expensesByCat = allExpenses.reduce((acc, curr) => {
             acc[curr.category] = (acc[curr.category] || 0) + Number(curr.amount || 0);
             return acc;
         }, {} as Record<string, number>);
 
-        const revenueByMethod = filteredServices.filteredServices.reduce((acc, curr) => {
+        const revenueByMethod = completedServices.reduce((acc, curr) => {
             const method = curr.paymentMethod || 'PIX';
             acc[method] = (acc[method] || 0) + Number(curr.cost || 0) + Number(curr.waitingTime || 0);
             return acc;
         }, { PIX: 0, CASH: 0, CARD: 0 } as Record<string, number>);
 
-        const totalOperationalExpenses = filteredExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+        const totalOperationalExpenses = allExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
         const netProfit = totalRevenue - totalDriverPay - totalOperationalExpenses;
 
         return {
@@ -156,9 +163,10 @@ export const Dashboard: React.FC<DashboardProps> = () => {
             expensesByCat,
             revenueByMethod
         };
-    }, [filteredServices, filteredExpenses]);
+    }, [processedData]);
 
     const chartData = useMemo(() => {
+        const { completedServices, allExpenses } = processedData;
         const dataMap = new Map<string, { name: string, revenue: number, cost: number, profit: number, sortKey: number }>();
 
         const addToMap = (rawDateStr: string, revenue: number, cost: number) => {
@@ -188,20 +196,21 @@ export const Dashboard: React.FC<DashboardProps> = () => {
             dataMap.set(key, entry);
         };
 
-        filteredServices.filteredServices.forEach(s => 
+        completedServices.forEach(s => 
             addToMap(s.date, Number(s.cost || 0) + Number(s.waitingTime || 0), Number(s.driverFee || 0))
         );
-        filteredExpenses.forEach(e => addToMap(e.date, 0, Number(e.amount || 0)));
+        allExpenses.forEach(e => addToMap(e.date, 0, Number(e.amount || 0)));
 
         return Array.from(dataMap.values())
             .map(e => ({ ...e, profit: e.revenue - e.cost }))
             .sort((a, b) => a.sortKey - b.sortKey);
-    }, [filteredServices, filteredExpenses, timeFrame]);
+    }, [processedData, timeFrame]);
 
     const topClients = useMemo(() => {
+        const { completedServices } = processedData;
         const clientStats = new Map<string, { name: string, count: number, revenue: number }>();
 
-        filteredServices.filteredServices.forEach(s => {
+        completedServices.forEach(s => {
             const client = clients.find(c => c.id === s.clientId);
             const name = client ? client.name : 'Desconhecido';
             const id = s.clientId;
@@ -216,7 +225,7 @@ export const Dashboard: React.FC<DashboardProps> = () => {
         const sortedByCount = Array.from(clientStats.values()).sort((a, b) => b.count - a.count).slice(0, 5);
 
         return { byRevenue: sortedByRevenue, byCount: sortedByCount };
-    }, [filteredServices, clients]);
+    }, [processedData, clients]);
 
     return (
         <div className="space-y-6 animate-fade-in">
@@ -323,7 +332,6 @@ export const Dashboard: React.FC<DashboardProps> = () => {
                         </div>
                     </div>
                     
-                    {/* Top Clientes (Simplificado) */}
                      <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 flex-1">
                         <h2 className="text-lg font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2"><Trophy size={20} className="text-yellow-500"/> Top Clientes</h2>
                         <div className="space-y-3">
