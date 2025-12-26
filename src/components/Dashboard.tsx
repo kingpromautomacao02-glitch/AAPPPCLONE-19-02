@@ -361,13 +361,32 @@ export const Dashboard: React.FC<DashboardProps> = () => {
                     </div>
 
                     <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 flex-1">
-                        <h2 className="text-lg font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2"><Trophy size={20} className="text-yellow-500" /> Top Clientes</h2>
+                        <h2 className="text-lg font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2"><Trophy size={20} className="text-yellow-500" /> Top Clientes (Faturamento)</h2>
                         <div className="space-y-3">
                             {topClients.byRevenue.length === 0 ? <p className="text-slate-400 italic">Sem dados</p> :
                                 topClients.byRevenue.map((c, i) => (
                                     <div key={i} className="flex justify-between p-2 bg-slate-50 dark:bg-slate-700 rounded border border-slate-100 dark:border-slate-600">
-                                        <span className="text-slate-800 dark:text-white font-medium truncate w-32">{c.name}</span>
-                                        <span className="text-slate-600 dark:text-slate-300 font-bold">R$ {c.revenue.toFixed(0)}</span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="bg-yellow-100 text-yellow-700 w-5 h-5 flex items-center justify-center rounded-full text-xs font-bold">{i + 1}</span>
+                                            <span className="text-slate-800 dark:text-white font-medium truncate w-32 md:w-40">{c.name}</span>
+                                        </div>
+                                        <span className="text-slate-600 dark:text-slate-300 font-bold">R$ {c.revenue.toFixed(2)}</span>
+                                    </div>
+                                ))}
+                        </div>
+                    </div>
+
+                    <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 flex-1">
+                        <h2 className="text-lg font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2"><Package size={20} className="text-blue-500" /> Top Clientes (Volume)</h2>
+                        <div className="space-y-3">
+                            {topClients.byCount.length === 0 ? <p className="text-slate-400 italic">Sem dados</p> :
+                                topClients.byCount.map((c, i) => (
+                                    <div key={i} className="flex justify-between p-2 bg-slate-50 dark:bg-slate-700 rounded border border-slate-100 dark:border-slate-600">
+                                        <div className="flex items-center gap-2">
+                                            <span className="bg-blue-100 text-blue-700 w-5 h-5 flex items-center justify-center rounded-full text-xs font-bold">{i + 1}</span>
+                                            <span className="text-slate-800 dark:text-white font-medium truncate w-32 md:w-40">{c.name}</span>
+                                        </div>
+                                        <span className="text-slate-600 dark:text-slate-300 font-bold">{c.count} serviços</span>
                                     </div>
                                 ))}
                         </div>
