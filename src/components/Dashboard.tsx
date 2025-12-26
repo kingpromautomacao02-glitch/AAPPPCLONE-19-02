@@ -10,7 +10,7 @@ interface DashboardProps {
 
 type TimeFrame = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' | 'CUSTOM';
 
-// --- FUNÇÃO DE DATA (Sem date-fns para evitar erros de build) ---
+// --- FUNÇÃO DE DATA (Garante o dia completo) ---
 const getSaoPauloDateStr = (dateInput: Date | string, isEndOfDay: boolean = false) => {
     let d: Date;
     if (typeof dateInput === 'string') {
@@ -19,13 +19,12 @@ const getSaoPauloDateStr = (dateInput: Date | string, isEndOfDay: boolean = fals
         d = dateInput;
     }
 
-    // Converte para SP
     const spDate = new Date(d.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
     const year = spDate.getFullYear();
     const month = String(spDate.getMonth() + 1).padStart(2, '0');
     const day = String(spDate.getDate()).padStart(2, '0');
     
-    // Se for final do dia, adiciona o horário limite
+    // Se for data final, pega até o último segundo do dia
     if (isEndOfDay) {
         return `${year}-${month}-${day}T23:59:59`;
     }
@@ -90,13 +89,16 @@ export const Dashboard: React.FC<DashboardProps> = () => {
         const loadData = async () => {
             setLoading(true);
             try {
-                // Previne crash se a API falhar
+                // Carrega dados com tratamento de erro para não quebrar a tela
                 const [clientsData, servicesData, expensesData] = await Promise.all([
-                    getClients().catch(() => []),
-                    getServices(startStr, endStr).catch(() => []),
-                    getExpenses(startStr, endStr).catch(() => [])
+                    getClients().catch(err => { console.error('Clients error', err); return []; }),
+                    getServices(startStr, endStr).catch(err => { console.error('Services error', err); return []; }),
+                    getExpenses(startStr, endStr).catch(err => { console.error('Expenses error', err); return []; })
                 ]);
                 
+                // Debug: Log para verificar se os dados estão chegando
+                console.log(`Dados carregados: ${servicesData?.length || 0} serviços, ${expensesData?.length || 0} despesas.`);
+
                 setClients(clientsData || []);
                 setServices(servicesData || []);
                 setExpenses(expensesData || []);
@@ -111,32 +113,41 @@ export const Dashboard: React.FC<DashboardProps> = () => {
         }
     }, [startStr, endStr]);
 
-    // --- CORREÇÃO DO TRAVAMENTO AQUI ---
+    // Separação dos dados para cálculo seguro
     const processedData = useMemo(() => {
-        // Separa os dados corretamente em um objeto único
+        // Ignora apenas o que foi excluído da lixeira e cancelados
+        const activeServices = services.filter(s => !s.deletedAt && s.status !== 'Cancelado');
+
+        // Receita: Considera concluídos ou pagos (Flexibilidade para aparecer dados)
+        // Normaliza o status para lower case para evitar erro de 'Concluído' vs 'Concluido'
+        const revenueServices = activeServices.filter(s => {
+            const status = (s.status || '').toLowerCase();
+            return status.includes('conclu') || status.includes('final') || status.includes('entregue') || s.paid;
+        });
+        
+        // Pendentes: Ativos que não foram pagos
+        const pendingServices = activeServices.filter(s => !s.paid);
+        
         return {
-            // Serviços Concluídos (para Receita)
-            completedServices: services.filter(s => !s.deletedAt && s.status === 'Concluído'),
-            
-            // Serviços Pendentes de Pagamento (Concluídos mas não pagos)
-            pendingServices: services.filter(s => !s.deletedAt && !s.paid && s.status === 'Concluído'),
-            
-            // Todas as despesas
+            activeServices,
+            revenueServices,
+            pendingServices,
             allExpenses: expenses
         };
     }, [services, expenses]);
 
     const stats = useMemo(() => {
-        const { completedServices, pendingServices, allExpenses } = processedData;
+        const { revenueServices, pendingServices, allExpenses, activeServices } = processedData;
 
-        // 1. Receita Total: Custo + Espera (SEM Taxa Extra)
-        const totalRevenue = completedServices.reduce((sum, s) => 
+        // 1. Receita Total (Custo + Espera) - SEM Taxa Extra
+        const totalRevenue = revenueServices.reduce((sum, s) => 
             sum + Number(s.cost || 0) + Number(s.waitingTime || 0), 0);
         
-        const totalDriverPay = completedServices.reduce((sum, s) => 
+        // 2. Custo Motoboy (Baseado em todos os serviços ativos)
+        const totalDriverPay = activeServices.reduce((sum, s) => 
             sum + Number(s.driverFee || 0), 0);
 
-        // 2. A Receber: Custo + Espera (SEM Taxa Extra)
+        // 3. A Receber (Custo + Espera) - SEM Taxa Extra
         const totalPending = pendingServices.reduce((sum, s) => 
             sum + Number(s.cost || 0) + Number(s.waitingTime || 0), 0);
 
@@ -145,13 +156,15 @@ export const Dashboard: React.FC<DashboardProps> = () => {
             return acc;
         }, {} as Record<string, number>);
 
-        const revenueByMethod = completedServices.reduce((acc, curr) => {
+        const revenueByMethod = revenueServices.reduce((acc, curr) => {
             const method = curr.paymentMethod || 'PIX';
             acc[method] = (acc[method] || 0) + Number(curr.cost || 0) + Number(curr.waitingTime || 0);
             return acc;
         }, { PIX: 0, CASH: 0, CARD: 0 } as Record<string, number>);
 
         const totalOperationalExpenses = allExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+        
+        // Lucro Líquido
         const netProfit = totalRevenue - totalDriverPay - totalOperationalExpenses;
 
         return {
@@ -161,12 +174,13 @@ export const Dashboard: React.FC<DashboardProps> = () => {
             totalOperationalExpenses,
             netProfit,
             expensesByCat,
-            revenueByMethod
+            revenueByMethod,
+            totalCount: activeServices.length // Contagem total para diagnóstico
         };
     }, [processedData]);
 
     const chartData = useMemo(() => {
-        const { completedServices, allExpenses } = processedData;
+        const { revenueServices, allExpenses } = processedData;
         const dataMap = new Map<string, { name: string, revenue: number, cost: number, profit: number, sortKey: number }>();
 
         const addToMap = (rawDateStr: string, revenue: number, cost: number) => {
@@ -196,7 +210,7 @@ export const Dashboard: React.FC<DashboardProps> = () => {
             dataMap.set(key, entry);
         };
 
-        completedServices.forEach(s => 
+        revenueServices.forEach(s => 
             addToMap(s.date, Number(s.cost || 0) + Number(s.waitingTime || 0), Number(s.driverFee || 0))
         );
         allExpenses.forEach(e => addToMap(e.date, 0, Number(e.amount || 0)));
@@ -207,10 +221,10 @@ export const Dashboard: React.FC<DashboardProps> = () => {
     }, [processedData, timeFrame]);
 
     const topClients = useMemo(() => {
-        const { completedServices } = processedData;
+        const { revenueServices } = processedData;
         const clientStats = new Map<string, { name: string, count: number, revenue: number }>();
 
-        completedServices.forEach(s => {
+        revenueServices.forEach(s => {
             const client = clients.find(c => c.id === s.clientId);
             const name = client ? client.name : 'Desconhecido';
             const id = s.clientId;
@@ -238,6 +252,9 @@ export const Dashboard: React.FC<DashboardProps> = () => {
                     <p className="text-slate-500 dark:text-slate-400 text-sm flex items-center gap-1 mt-1">
                         <Calendar size={14} />
                         Exibindo dados de: <span className="font-bold text-slate-700 dark:text-slate-300">{dateLabel}</span>
+                        <span className="ml-2 text-xs bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded text-slate-500">
+                           ({stats.totalCount} serviços encontrados)
+                        </span>
                     </p>
                 </div>
 
