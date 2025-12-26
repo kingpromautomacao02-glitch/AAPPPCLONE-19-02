@@ -10,11 +10,9 @@ interface DashboardProps {
 
 type TimeFrame = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' | 'CUSTOM';
 
-// Função auxiliar segura para somar valores (evita erros como "100" + "20" = "10020")
 const safeFloat = (val: any) => {
     if (!val) return 0;
     if (typeof val === 'number') return val;
-    // Remove R$ e troca virgula por ponto
     return parseFloat(val.toString().replace('R$', '').replace('.', '').replace(',', '.')) || 0;
 };
 
@@ -24,19 +22,17 @@ export const Dashboard: React.FC<DashboardProps> = () => {
     const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
     const [loading, setLoading] = useState(true);
 
-    // Estado do filtro de tempo
     const [timeFrame, setTimeFrame] = useState<TimeFrame>('MONTHLY');
     const [customStart, setCustomStart] = useState(new Date().toISOString().split('T')[0]);
     const [customEnd, setCustomEnd] = useState(new Date().toISOString().split('T')[0]);
 
-    // 1. CARREGAMENTO DOS DADOS (Busca TUDO e filtra na memória, igual ao Relatório)
     useEffect(() => {
         const loadData = async () => {
             setLoading(true);
             try {
                 const [allClients, allServices, allExpenses] = await Promise.all([
                     getClients(),
-                    getServices(), // Traz tudo para garantir que não falta nada
+                    getServices(), 
                     getExpenses()
                 ]);
                 setClients(allClients || []);
@@ -51,24 +47,18 @@ export const Dashboard: React.FC<DashboardProps> = () => {
         loadData();
     }, []);
 
-    // 2. DEFINIÇÃO DAS DATAS DE FILTRO
     const { startDate, endDate, label } = useMemo(() => {
         const now = new Date();
-        // Ajuste simples para garantir fuso horário correto no Brasil
         now.setHours(now.getHours() - 3); 
-        
         const todayStr = now.toISOString().split('T')[0];
-        let start = todayStr;
-        let end = todayStr;
-        let txt = 'Hoje';
+        
+        let start = todayStr, end = todayStr, txt = 'Hoje';
 
         if (timeFrame === 'DAILY') {
-            start = todayStr;
-            end = todayStr;
-            txt = 'Hoje';
+            start = end = todayStr;
         } else if (timeFrame === 'WEEKLY') {
             const day = now.getDay();
-            const diff = now.getDate() - day + (day === 0 ? -6 : 1) - 1; // Ajuste para segunda-feira
+            const diff = now.getDate() - day + (day === 0 ? -6 : 1) - 1;
             const first = new Date(now.setDate(diff));
             const last = new Date(now.setDate(diff + 6));
             start = first.toISOString().split('T')[0];
@@ -87,19 +77,17 @@ export const Dashboard: React.FC<DashboardProps> = () => {
         } else if (timeFrame === 'CUSTOM') {
             start = customStart;
             end = customEnd;
-            txt = 'Período Personalizado';
+            txt = 'Personalizado';
         }
-
         return { startDate: start, endDate: end, label: txt };
     }, [timeFrame, customStart, customEnd]);
 
-    // 3. PROCESSAMENTO E FILTRAGEM (O "Coração" do Dashboard)
     const stats = useMemo(() => {
-        // Filtra pela data (String vs String simples para não ter erro)
+        // Filtra serviços pela data e remove excluídos/cancelados
         const filteredServices = services.filter(s => {
-            if (!s.date) return false;
+            if (!s.date || s.deletedAt || s.status === 'Cancelado') return false;
             const sDate = s.date.split('T')[0];
-            return sDate >= startDate && sDate <= endDate && !s.deletedAt;
+            return sDate >= startDate && sDate <= endDate;
         });
 
         const filteredExpenses = expenses.filter(e => {
@@ -108,37 +96,30 @@ export const Dashboard: React.FC<DashboardProps> = () => {
             return eDate >= startDate && eDate <= endDate;
         });
 
-        // Cálculos
-        let totalRevenue = 0;
-        let totalPending = 0;
+        let totalRevenue = 0; // Faturamento Bruto (Tudo que foi gerado)
+        let totalReceived = 0; // O que realmente entrou no caixa
+        let totalPending = 0; // O que falta receber
         let totalDriverPay = 0;
+        
         const revenueByMethod: any = { PIX: 0, CASH: 0, CARD: 0 };
 
         filteredServices.forEach(service => {
-            const cost = safeFloat(service.cost);
-            const waiting = safeFloat(service.waitingTime);
+            const val = safeFloat(service.cost) + safeFloat(service.waitingTime);
             const driver = safeFloat(service.driverFee);
-            const totalServiceValue = cost + waiting; // SOMA: Custo + Espera
 
-            // Se for cancelado, ignora tudo
-            if (service.status === 'Cancelado') return;
+            // Faturamento Total (Bruto) = Soma de tudo que não foi cancelado
+            totalRevenue += val; 
+            totalDriverPay += driver;
 
-            // Se for Pendente e não pago, soma no "A Receber"
-            if (service.status === 'Pendente' && !service.paid) {
-                totalPending += totalServiceValue;
-            } else {
-                // Se for Concluído/Finalizado/Entregue OU estiver Pago, conta como Receita
-                // Essa lógica garante que bata com o relatório que mostra tudo que foi feito
-                totalRevenue += totalServiceValue;
-                totalDriverPay += driver;
-
-                // Soma por método de pagamento
+            if (service.paid) {
+                totalReceived += val;
                 const method = service.paymentMethod || 'PIX';
-                revenueByMethod[method] = (revenueByMethod[method] || 0) + totalServiceValue;
+                revenueByMethod[method] = (revenueByMethod[method] || 0) + val;
+            } else {
+                totalPending += val;
             }
         });
 
-        // Despesas
         let totalOperationalExpenses = 0;
         const expensesByCat: any = {};
         filteredExpenses.forEach(exp => {
@@ -147,76 +128,70 @@ export const Dashboard: React.FC<DashboardProps> = () => {
             expensesByCat[exp.category] = (expensesByCat[exp.category] || 0) + amount;
         });
 
+        // Lucro Líquido Real = (O que recebeu) - (O que pagou)
+        // Se você quiser Lucro Projetado, troque totalReceived por totalRevenue abaixo
         const netProfit = totalRevenue - totalDriverPay - totalOperationalExpenses;
 
         return {
             totalRevenue,
+            totalReceived,
             totalPending,
             totalDriverPay,
             totalOperationalExpenses,
             netProfit,
             revenueByMethod,
             expensesByCat,
-            filteredServices, // Guardamos para usar no gráfico e top clients
+            filteredServices,
             filteredExpenses
         };
     }, [services, expenses, startDate, endDate]);
 
-    // 4. DADOS DO GRÁFICO (Simplificado)
+    // Prepara dados do gráfico
     const chartData = useMemo(() => {
-        const data: any[] = [];
-        // Agrupa por dia
         const daysMap = new Map();
-
+        
         stats.filteredServices.forEach(s => {
-            const day = s.date.split('T')[0].split('-').slice(1).reverse().join('/'); // DD/MM
-            if (!daysMap.has(day)) daysMap.set(day, { name: day, revenue: 0, cost: 0, profit: 0 });
+            const day = s.date.split('T')[0].split('-').slice(1).reverse().join('/');
+            if (!daysMap.has(day)) daysMap.set(day, { name: day, revenue: 0, cost: 0 });
             
             const val = safeFloat(s.cost) + safeFloat(s.waitingTime);
             const driver = safeFloat(s.driverFee);
-            
             const entry = daysMap.get(day);
-            entry.revenue += val;
+            
+            // No gráfico, mostramos o Faturamento total daquele dia
+            entry.revenue += val; 
             entry.cost += driver;
             daysMap.set(day, entry);
         });
 
         stats.filteredExpenses.forEach(e => {
             const day = e.date.split('T')[0].split('-').slice(1).reverse().join('/');
-            if (!daysMap.has(day)) daysMap.set(day, { name: day, revenue: 0, cost: 0, profit: 0 });
+            if (!daysMap.has(day)) daysMap.set(day, { name: day, revenue: 0, cost: 0 });
             const entry = daysMap.get(day);
             entry.cost += safeFloat(e.amount);
             daysMap.set(day, entry);
         });
 
-        daysMap.forEach(v => {
-            v.profit = v.revenue - v.cost;
-            data.push(v);
-        });
-
-        return data.sort((a, b) => {
-            // Ordenação simples por dia/mês
-            const [d1, m1] = a.name.split('/').map(Number);
-            const [d2, m2] = b.name.split('/').map(Number);
-            return (m1 * 31 + d1) - (m2 * 31 + d2);
-        });
+        return Array.from(daysMap.values())
+            .map((v: any) => ({ ...v, profit: v.revenue - v.cost }))
+            .sort((a, b) => {
+                const [d1, m1] = a.name.split('/').map(Number);
+                const [d2, m2] = b.name.split('/').map(Number);
+                return (m1 * 31 + d1) - (m2 * 31 + d2);
+            });
     }, [stats]);
 
-    // 5. TOP CLIENTES
     const topClients = useMemo(() => {
         const map = new Map();
         stats.filteredServices.forEach(s => {
-            if (s.status === 'Cancelado') return;
             const val = safeFloat(s.cost) + safeFloat(s.waitingTime);
             const name = clients.find(c => c.id === s.clientId)?.name || 'Cliente Removido';
-            
             if (!map.has(s.clientId)) map.set(s.clientId, { name, revenue: 0, count: 0 });
             const entry = map.get(s.clientId);
             entry.revenue += val;
             entry.count += 1;
             map.set(s.clientId, entry);
         });
-
         const list = Array.from(map.values());
         return {
             byRevenue: [...list].sort((a, b) => b.revenue - a.revenue).slice(0, 5),
@@ -226,6 +201,7 @@ export const Dashboard: React.FC<DashboardProps> = () => {
 
     return (
         <div className="space-y-6 animate-fade-in">
+            {/* Header e Filtros */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-2">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
@@ -234,10 +210,9 @@ export const Dashboard: React.FC<DashboardProps> = () => {
                     </h1>
                     <p className="text-slate-500 dark:text-slate-400 text-sm flex items-center gap-1 mt-1">
                         <Calendar size={14} />
-                        Exibindo dados de: <span className="font-bold text-slate-700 dark:text-slate-300">{label}</span>
+                        Dados de: <span className="font-bold text-slate-700 dark:text-slate-300">{label}</span>
                     </p>
                 </div>
-
                 <div className="flex bg-white dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm self-start md:self-auto overflow-x-auto max-w-full items-center">
                     {(['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'] as TimeFrame[]).map(tf => (
                         <button key={tf} onClick={() => setTimeFrame(tf)} className={`px-4 py-2 text-xs sm:text-sm font-bold rounded-md transition-all whitespace-nowrap ${timeFrame === tf ? 'bg-blue-600 text-white shadow-md' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
@@ -257,13 +232,14 @@ export const Dashboard: React.FC<DashboardProps> = () => {
                 </div>
             </div>
 
+            {/* Cards Principais */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
                 {[
-                    { title: 'Faturamento', value: stats.totalRevenue, icon: <DollarSign size={48} className="text-blue-600" />, color: 'text-blue-700' },
-                    { title: 'A Receber', value: stats.totalPending, icon: <Clock size={48} className="text-amber-600" />, color: 'text-amber-600', border: 'border-l-4 border-l-amber-400' },
-                    { title: 'Pago aos Motoboys', value: stats.totalDriverPay, icon: <Bike size={48} className="text-red-600" />, color: 'text-red-600' },
-                    { title: 'Despesas', value: stats.totalOperationalExpenses, icon: <Wallet size={48} className="text-orange-600" />, color: 'text-orange-600' },
-                    { title: 'Lucro Líquido', value: stats.netProfit, icon: <TrendingUp size={48} className="text-emerald-600" />, color: stats.netProfit >= 0 ? 'text-emerald-700' : 'text-red-600' }
+                    { title: 'Faturamento Total', value: stats.totalRevenue, icon: <DollarSign size={48} className="text-blue-600" />, color: 'text-blue-700', sub: 'Serviços Prestados' },
+                    { title: 'A Receber', value: stats.totalPending, icon: <Clock size={48} className="text-amber-600" />, color: 'text-amber-600', border: 'border-l-4 border-l-amber-400', sub: 'Pendente' },
+                    { title: 'Pago aos Motoboys', value: stats.totalDriverPay, icon: <Bike size={48} className="text-red-600" />, color: 'text-red-600', sub: 'Comissão' },
+                    { title: 'Despesas', value: stats.totalOperationalExpenses, icon: <Wallet size={48} className="text-orange-600" />, color: 'text-orange-600', sub: 'Operacional' },
+                    { title: 'Lucro Líquido', value: stats.netProfit, icon: <TrendingUp size={48} className="text-emerald-600" />, color: stats.netProfit >= 0 ? 'text-emerald-700' : 'text-red-600', sub: 'Resultado Final' }
                 ].map((card, idx) => (
                     <div key={idx} className={`bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 relative overflow-hidden ${card.border || ''}`}>
                         <div className="absolute top-0 right-0 p-4 opacity-10">{card.icon}</div>
@@ -272,11 +248,13 @@ export const Dashboard: React.FC<DashboardProps> = () => {
                             <h3 className={`text-2xl font-bold ${card.color} dark:${card.color.replace('700', '400')}`}>
                                 R$ {card.value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </h3>
+                            <p className="text-[10px] text-slate-400 mt-1 uppercase font-bold">{card.sub}</p>
                         </div>
                     </div>
                 ))}
             </div>
 
+            {/* Gráfico e Detalhes */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
                     <h2 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-6">
@@ -306,7 +284,7 @@ export const Dashboard: React.FC<DashboardProps> = () => {
 
                 <div className="flex flex-col gap-6">
                     <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
-                        <h2 className="text-lg font-bold text-slate-800 dark:text-white mb-6">Receitas por Método</h2>
+                        <h2 className="text-lg font-bold text-slate-800 dark:text-white mb-6">Recebido por Método</h2>
                         <div className="space-y-4">
                             {[
                                 { label: 'Dinheiro', val: stats.revenueByMethod['CASH'], icon: <Banknote size={18} />, color: 'text-emerald-700', bg: 'bg-emerald-50' },
