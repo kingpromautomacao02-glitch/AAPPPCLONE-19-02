@@ -32,8 +32,8 @@ export class SupabaseAdapter implements DatabaseAdapter {
             phone: u.phone,
             role: u.role,
             status: u.status,
-            companyName: u.company_name,       
-            companyAddress: u.company_address, 
+            companyName: u.company_name,
+            companyAddress: u.company_address,
             companyCnpj: u.company_cnpj
         })) as User[];
     }
@@ -74,7 +74,7 @@ export class SupabaseAdapter implements DatabaseAdapter {
 
         // Tenta atualizar senha no Auth (se aplicável, falha silenciosamente se não for o user logado)
         if (!error && user.password) {
-            try { await this.supabase.auth.updateUser({ password: user.password }); } catch (e) {}
+            try { await this.supabase.auth.updateUser({ password: user.password }); } catch (e) { }
         }
     }
 
@@ -83,7 +83,6 @@ export class SupabaseAdapter implements DatabaseAdapter {
     }
 
     async login(email: string, pass: string): Promise<User | null> {
-<<<<<<< HEAD
         // Normalização de entrada para evitar erros bobos de espaço ou case
         const cleanEmail = email.trim().toLowerCase(); // Email sempre minúsculo
         const cleanPass = pass.trim();                 // Senha apenas sem espaços nas pontas
@@ -98,19 +97,6 @@ export class SupabaseAdapter implements DatabaseAdapter {
 
         if (error || !data) {
             console.warn(`Login falhou para: ${cleanEmail}. Erro: ${error?.message || 'Credenciais inválidas'}`);
-=======
-        // Busca direta na tabela users
-        // Nota: Requer que a Policy RLS permita leitura pública ou via função RPC
-        const { data, error } = await this.supabase
-            .from('users')
-            .select('*')
-            .eq('email', email)
-            .eq('password', pass) // Em produção, use hash/auth real
-            .single();
-
-        if (error || !data) {
-            console.error("Login falhou:", error?.message);
->>>>>>> 654817849d3d13cb2eb3b0a7b31a2cce84a9dd9e
             return null;
         }
 
@@ -184,7 +170,7 @@ export class SupabaseAdapter implements DatabaseAdapter {
 
     async getServices(ownerId?: string, start?: string, end?: string): Promise<ServiceRecord[]> {
         let query = this.supabase.from('services').select('*');
-        
+
         if (ownerId) query = query.eq('owner_id', ownerId);
         if (start && end) query = query.gte('date', start).lte('date', end);
 
@@ -266,11 +252,11 @@ export class SupabaseAdapter implements DatabaseAdapter {
         let query = this.supabase.from('expenses').select('*');
         if (ownerId) query = query.eq('owner_id', ownerId);
         if (start && end) query = query.gte('date', start).lte('date', end);
-        
+
         const { data, error } = await query;
         if (error) return [];
 
-        return data.map((d: any) => ({ 
+        return data.map((d: any) => ({
             id: d.id,
             ownerId: d.owner_id,
             category: d.category,
