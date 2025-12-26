@@ -7,6 +7,7 @@ import { getServices, getExpenses, getClients } from '../services/storageService
 import { jsPDF } from 'jspdf';
 // @ts-ignore
 import autoTable from 'jspdf-autotable';
+import { safeParseFloat } from '../utils/numberUtils';
 
 interface ReportsProps {
     // Nota: Agora buscamos os dados internamente para garantir otimização, 
@@ -88,7 +89,7 @@ export const Reports: React.FC<ReportsProps> = ({ currentUser }) => {
             const label = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 
             const monthlyServices = services.filter(s => s.date.startsWith(monthStr) && !s.deletedAt);
-            const total = monthlyServices.reduce((sum, s) => sum + s.cost + (s.waitingTime || 0), 0);
+            const total = monthlyServices.reduce((sum, s) => sum + safeParseFloat(s.cost) + safeParseFloat(s.waitingTime), 0);
 
             return {
                 id: monthStr,
@@ -191,9 +192,9 @@ export const Reports: React.FC<ReportsProps> = ({ currentUser }) => {
     }, [services, startDate, endDate, selectedClientId, paymentMethodFilter, onlyWithCnpj, clients]);
 
     const stats = useMemo(() => {
-        const revenue = filteredData.reduce((sum, s) => sum + s.cost + (s.waitingTime || 0), 0);
-        const cost = filteredData.reduce((sum, s) => sum + (s.driverFee || 0), 0);
-        const pending = filteredData.filter(s => !s.paid).reduce((sum, s) => sum + s.cost + (s.waitingTime || 0), 0);
+        const revenue = filteredData.reduce((sum, s) => sum + safeParseFloat(s.cost) + safeParseFloat(s.waitingTime), 0);
+        const cost = filteredData.reduce((sum, s) => sum + safeParseFloat(s.driverFee), 0);
+        const pending = filteredData.filter(s => !s.paid).reduce((sum, s) => sum + safeParseFloat(s.cost) + safeParseFloat(s.waitingTime), 0);
 
         return {
             count: filteredData.length,
@@ -378,7 +379,7 @@ export const Reports: React.FC<ReportsProps> = ({ currentUser }) => {
         const headers = ['Data', 'Cliente', 'Solicitante', ...pickupHeaders, ...deliveryHeaders, 'Valor (R$)', 'Custo Motoboy (R$)', 'Lucro (R$)', 'Pagamento', 'Status Pagamento'];
 
         const rows = filteredData.map(s => {
-            const profit = (s.cost + (s.waitingTime || 0)) - (s.driverFee || 0);
+            const profit = (safeParseFloat(s.cost) + safeParseFloat(s.waitingTime)) - safeParseFloat(s.driverFee);
             const payment = s.paymentMethod === 'PIX' ? 'Pix' : s.paymentMethod === 'CARD' ? 'Cartão' : s.paymentMethod === 'CASH' ? 'Dinheiro' : '-';
             const status = s.paid ? 'PAGO' : 'PENDENTE';
 
@@ -394,8 +395,8 @@ export const Reports: React.FC<ReportsProps> = ({ currentUser }) => {
                 ...pickupCols,
                 ...deliveryCols,
                 // SEM STATUS AQUI
-                (s.cost + (s.waitingTime || 0)).toFixed(2).replace('.', ','),
-                (s.driverFee || 0).toFixed(2).replace('.', ','),
+                (safeParseFloat(s.cost) + safeParseFloat(s.waitingTime)).toFixed(2).replace('.', ','),
+                safeParseFloat(s.driverFee).toFixed(2).replace('.', ','),
                 profit.toFixed(2).replace('.', ','),
                 payment,
                 status
@@ -483,7 +484,7 @@ export const Reports: React.FC<ReportsProps> = ({ currentUser }) => {
           </thead>
           <tbody>
             ${filteredData.map(s => {
-            const profit = (s.cost + (s.waitingTime || 0)) - (s.driverFee || 0);
+            const profit = (safeParseFloat(s.cost) + safeParseFloat(s.waitingTime)) - safeParseFloat(s.driverFee);
             const method = s.paymentMethod || 'PIX';
 
             const pickupCells = Array.from({ length: maxPickups }, (_, i) => `<td>${s.pickupAddresses[i] || ''}</td>`).join('');
@@ -496,7 +497,7 @@ export const Reports: React.FC<ReportsProps> = ({ currentUser }) => {
                   <td>${s.requesterName}</td>
                   ${pickupCells}
                   ${deliveryCells}
-                  <td class="money">R$ ${(s.cost + (s.waitingTime || 0)).toFixed(2)}</td>
+                  <td class="money">R$ {(safeParseFloat(s.cost) + safeParseFloat(s.waitingTime)).toFixed(2)}</td>
                   <td>${method}</td>
                   <td>${s.paid ? 'Pago' : 'Pendente'}</td>
                   <td class="money" style="color: ${profit >= 0 ? '#16a34a' : '#dc2626'}">R$ ${profit.toFixed(2)}</td>

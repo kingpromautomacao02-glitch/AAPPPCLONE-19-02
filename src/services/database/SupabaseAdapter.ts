@@ -16,7 +16,7 @@ export class SupabaseAdapter implements DatabaseAdapter {
     // --- USERS ---
     async getUsers(): Promise<User[]> {
         const { data, error } = await this.supabase.from('users').select('*');
-        
+
         if (error) {
             console.error("ERRO AO BUSCAR USUÁRIOS:", error.message, error.details);
             return [];
@@ -50,7 +50,7 @@ export class SupabaseAdapter implements DatabaseAdapter {
             company_address: user.companyAddress,
             company_cnpj: user.companyCnpj
         };
-        
+
         const { error } = await this.supabase.from('users').upsert(payload);
         if (error) console.error("Erro ao salvar usuário:", error.message);
     }
@@ -83,16 +83,20 @@ export class SupabaseAdapter implements DatabaseAdapter {
     }
 
     async login(email: string, pass: string): Promise<User | null> {
-        // Tenta buscar o usuário diretamente
+        // Normalização de entrada para evitar erros bobos de espaço ou case
+        const cleanEmail = email.trim().toLowerCase(); // Email sempre minúsculo
+        const cleanPass = pass.trim();                 // Senha apenas sem espaços nas pontas
+
+        // Tenta buscar o usuário
         const { data, error } = await this.supabase
             .from('users')
             .select('*')
-            .eq('email', email)
-            .eq('password', pass)
+            .eq('email', cleanEmail) // Busca pelo email normalizado
+            .eq('password', cleanPass)
             .single();
 
         if (error || !data) {
-            console.warn("Login falhou ou usuário não encontrado.");
+            console.warn(`Login falhou para: ${cleanEmail}. Erro: ${error?.message || 'Credenciais inválidas'}`);
             return null;
         }
 
@@ -205,7 +209,7 @@ export class SupabaseAdapter implements DatabaseAdapter {
     }
 
     async updateService(service: ServiceRecord, user?: User): Promise<void> {
-         const payload = {
+        const payload = {
             cost: service.cost,
             status: service.status,
             date: service.date,

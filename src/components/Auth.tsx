@@ -59,7 +59,7 @@ export const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
         setSuccessMsg('');
 
         if (view === 'LOGIN') {
-            const result = await loginUser(email, password);
+            const result = await loginUser(email.trim(), password.trim());
             if (result.success && result.user) {
                 onLoginSuccess(result.user);
             } else {

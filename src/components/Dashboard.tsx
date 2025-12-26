@@ -10,19 +10,11 @@ interface DashboardProps {
 
 type TimeFrame = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' | 'CUSTOM';
 
+import { safeParseFloat } from '../utils/numberUtils';
+
 // --- FUNÇÃO DE CONVERSÃO SEGURA PARA NÚMEROS ---
-// Corrige o problema de "soma errada" tratando textos e vírgulas
-const safeParseFloat = (val: any): number => {
-    if (val === undefined || val === null) return 0;
-    if (typeof val === 'number') return val;
-    if (typeof val === 'string') {
-        // Troca vírgula por ponto e remove símbolos de moeda se houver
-        const clean = val.replace(',', '.').replace(/[^0-9.-]/g, '');
-        const num = parseFloat(clean);
-        return isNaN(num) ? 0 : num;
-    }
-    return 0;
-};
+// (Agora importada de ../utils/numberUtils)
+
 
 // --- FUNÇÃO DE DATA SIMPLIFICADA ---
 // Garante compatibilidade com o banco para os dados aparecerem
@@ -65,13 +57,13 @@ export const Dashboard: React.FC<DashboardProps> = () => {
             l = 'Hoje';
         } else if (timeFrame === 'WEEKLY') {
             const start = new Date(now);
-            const day = start.getDay(); 
-            const diff = start.getDate() - day; 
+            const day = start.getDay();
+            const diff = start.getDate() - day;
             start.setDate(diff);
             s = getSaoPauloDateStr(start);
 
             const end = new Date(start);
-            end.setDate(start.getDate() + 6); 
+            end.setDate(start.getDate() + 6);
             e = getSaoPauloDateStr(end);
             l = 'Esta Semana';
         } else if (timeFrame === 'MONTHLY') {
@@ -104,7 +96,7 @@ export const Dashboard: React.FC<DashboardProps> = () => {
                     getServices(startStr, endStr).catch(() => []),
                     getExpenses(startStr, endStr).catch(() => [])
                 ]);
-                
+
                 setClients(clientsData || []);
                 setServices(servicesData || []);
                 setExpenses(expensesData || []);
@@ -132,10 +124,10 @@ export const Dashboard: React.FC<DashboardProps> = () => {
             const status = (s.status || '').toLowerCase();
             return status.includes('conclu') || status.includes('final') || status.includes('entregue') || s.paid;
         });
-        
+
         // Pendentes: Serviços ativos que não foram pagos
         const pendingServices = activeServices.filter(s => !s.paid);
-        
+
         return {
             activeServices,
             revenueServices,
@@ -148,17 +140,17 @@ export const Dashboard: React.FC<DashboardProps> = () => {
         const { revenueServices, pendingServices, allExpenses, activeServices } = processedData;
 
         // --- CÁLCULOS COM CONVERSÃO SEGURA (CORREÇÃO DO FATURAMENTO) ---
-        
+
         // 1. Receita Total = Custo Base + Tempo de Espera
-        const totalRevenue = revenueServices.reduce((sum, s) => 
+        const totalRevenue = revenueServices.reduce((sum, s) =>
             sum + safeParseFloat(s.cost) + safeParseFloat(s.waitingTime), 0);
-        
+
         // 2. Custo Motoboy
-        const totalDriverPay = activeServices.reduce((sum, s) => 
+        const totalDriverPay = activeServices.reduce((sum, s) =>
             sum + safeParseFloat(s.driverFee), 0);
 
         // 3. A Receber = Custo Base + Espera (dos não pagos)
-        const totalPending = pendingServices.reduce((sum, s) => 
+        const totalPending = pendingServices.reduce((sum, s) =>
             sum + safeParseFloat(s.cost) + safeParseFloat(s.waitingTime), 0);
 
         // Despesas por Categoria
@@ -175,7 +167,7 @@ export const Dashboard: React.FC<DashboardProps> = () => {
         }, { PIX: 0, CASH: 0, CARD: 0 } as Record<string, number>);
 
         const totalOperationalExpenses = allExpenses.reduce((sum, e) => sum + safeParseFloat(e.amount), 0);
-        
+
         // Lucro Líquido
         const netProfit = totalRevenue - totalDriverPay - totalOperationalExpenses;
 
@@ -199,7 +191,7 @@ export const Dashboard: React.FC<DashboardProps> = () => {
             if (!rawDateStr) return;
             const spDateStr = getSaoPauloDateStr(rawDateStr);
             const [yearStr, monthStr, dayStr] = spDateStr.split('-');
-            
+
             let key = '';
             let label = '';
             let order = 0;
@@ -222,7 +214,7 @@ export const Dashboard: React.FC<DashboardProps> = () => {
             dataMap.set(key, entry);
         };
 
-        revenueServices.forEach(s => 
+        revenueServices.forEach(s =>
             addToMap(s.date, safeParseFloat(s.cost) + safeParseFloat(s.waitingTime), safeParseFloat(s.driverFee))
         );
         allExpenses.forEach(e => addToMap(e.date, 0, safeParseFloat(e.amount)));
@@ -265,7 +257,7 @@ export const Dashboard: React.FC<DashboardProps> = () => {
                         <Calendar size={14} />
                         Exibindo dados de: <span className="font-bold text-slate-700 dark:text-slate-300">{dateLabel}</span>
                         <span className="ml-2 text-xs bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded text-slate-500">
-                           ({stats.totalCount} serviços encontrados)
+                            ({stats.totalCount} serviços encontrados)
                         </span>
                     </p>
                 </div>
@@ -363,17 +355,17 @@ export const Dashboard: React.FC<DashboardProps> = () => {
                             ))}
                         </div>
                     </div>
-                    
-                     <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 flex-1">
-                        <h2 className="text-lg font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2"><Trophy size={20} className="text-yellow-500"/> Top Clientes</h2>
+
+                    <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 flex-1">
+                        <h2 className="text-lg font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2"><Trophy size={20} className="text-yellow-500" /> Top Clientes</h2>
                         <div className="space-y-3">
-                            {topClients.byRevenue.length === 0 ? <p className="text-slate-400 italic">Sem dados</p> : 
-                            topClients.byRevenue.map((c, i) => (
-                                <div key={i} className="flex justify-between p-2 bg-slate-50 dark:bg-slate-700 rounded border border-slate-100 dark:border-slate-600">
-                                    <span className="text-slate-800 dark:text-white font-medium truncate w-32">{c.name}</span>
-                                    <span className="text-slate-600 dark:text-slate-300 font-bold">R$ {c.revenue.toFixed(0)}</span>
-                                </div>
-                            ))}
+                            {topClients.byRevenue.length === 0 ? <p className="text-slate-400 italic">Sem dados</p> :
+                                topClients.byRevenue.map((c, i) => (
+                                    <div key={i} className="flex justify-between p-2 bg-slate-50 dark:bg-slate-700 rounded border border-slate-100 dark:border-slate-600">
+                                        <span className="text-slate-800 dark:text-white font-medium truncate w-32">{c.name}</span>
+                                        <span className="text-slate-600 dark:text-slate-300 font-bold">R$ {c.revenue.toFixed(0)}</span>
+                                    </div>
+                                ))}
                         </div>
                     </div>
                 </div>

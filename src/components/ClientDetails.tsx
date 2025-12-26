@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Client, ServiceRecord, PaymentMethod, User, ServiceLog } from '../types';
-import { saveService, updateService, getServicesByClient, bulkUpdateServices, deleteService, restoreService, getServiceLogs } from '../services/storageService';
+import { saveService, updateService, getServicesByClient, bulkUpdateServices, deleteService, restoreService, getServiceLogs, saveClient } from '../services/storageService';
 import { ArrowLeft, Plus, Calendar, MapPin, Filter, FileSpreadsheet, X, Bike, ChevronDown, FileText, ShieldCheck, Pencil, DollarSign, CheckCircle, AlertCircle, PieChart, List, CheckSquare, Square, MoreHorizontal, User as UserIcon, Building, MinusSquare, Share2, Phone, Mail, Banknote, QrCode, CreditCard, MessageCircle, Loader2, Download, Table, FileDown, Package, Clock, XCircle, Activity, Trash2, AlertTriangle, FileCheck, Timer, Hash, Copy, RotateCcw, Archive, History } from 'lucide-react';
 // @ts-ignore
 import { jsPDF } from 'jspdf';
@@ -10,6 +10,7 @@ import autoTable from 'jspdf-autotable';
 import html2canvas from 'html2canvas';
 import { toast } from 'sonner';
 import { ClientForm } from './ClientForm';
+import { safeParseFloat } from '../utils/numberUtils';
 
 interface ClientDetailsProps {
     client: Client;
@@ -671,12 +672,12 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialCli
     };
 
     const stats = useMemo(() => {
-        const totalPaid = filteredServices.filter(s => s.paid).reduce((sum, s) => sum + s.cost + (s.waitingTime || 0), 0);
-        const totalPending = filteredServices.filter(s => !s.paid).reduce((sum, s) => sum + s.cost + (s.waitingTime || 0), 0);
+        const totalPaid = filteredServices.filter(s => s.paid).reduce((sum, s) => sum + safeParseFloat(s.cost) + safeParseFloat(s.waitingTime), 0);
+        const totalPending = filteredServices.filter(s => !s.paid).reduce((sum, s) => sum + safeParseFloat(s.cost) + safeParseFloat(s.waitingTime), 0);
 
         const revenueByMethod = filteredServices.reduce((acc, curr) => {
             const method = curr.paymentMethod || 'PIX';
-            acc[method] = (acc[method] || 0) + curr.cost + (curr.waitingTime || 0);
+            acc[method] = (acc[method] || 0) + safeParseFloat(curr.cost) + safeParseFloat(curr.waitingTime);
             return acc;
         }, { PIX: 0, CASH: 0, CARD: 0 } as Record<string, number>);
 
@@ -757,9 +758,9 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialCli
 
                 // --- TABELA ATUALIZADA ---
                 const tableData = filteredServices.map(s => {
-                    const baseCost = s.cost;
-                    const waiting = s.waitingTime || 0;
-                    const extra = s.extraFee || 0;
+                    const baseCost = safeParseFloat(s.cost);
+                    const waiting = safeParseFloat(s.waitingTime);
+                    const extra = safeParseFloat(s.extraFee);
                     const lineTotal = baseCost + waiting + extra;
 
                     const displayOrderId = s.manualOrderId
