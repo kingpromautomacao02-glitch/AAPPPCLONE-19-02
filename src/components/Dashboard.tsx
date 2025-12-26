@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { Client, ServiceRecord, ExpenseRecord } from '../types';
-import { TrendingUp, DollarSign, Bike, Wallet, Banknote, QrCode, CreditCard, CalendarDays, Calendar, Filter, Utensils, Fuel, Trophy, Package, Clock } from 'lucide-react';
+import { TrendingUp, DollarSign, Bike, Wallet, Banknote, QrCode, CreditCard, CalendarDays, Calendar, Filter, Utensils, Fuel, Clock, Trophy, Package } from 'lucide-react';
 import { getServices, getExpenses, getClients } from '../services/storageService';
 
 interface DashboardProps {
@@ -10,25 +10,33 @@ interface DashboardProps {
 
 type TimeFrame = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' | 'CUSTOM';
 
-// --- FUNÇÃO DE DATA CORRIGIDA (Garante final do dia para não perder dados) ---
-const getSaoPauloDateStr = (dateInput: Date | string, isEndOfDay: boolean = false) => {
+// --- FUNÇÃO DE CONVERSÃO SEGURA PARA NÚMEROS ---
+// Corrige o problema de "soma errada" tratando textos e vírgulas
+const safeParseFloat = (val: any): number => {
+    if (val === undefined || val === null) return 0;
+    if (typeof val === 'number') return val;
+    if (typeof val === 'string') {
+        // Troca vírgula por ponto e remove símbolos de moeda se houver
+        const clean = val.replace(',', '.').replace(/[^0-9.-]/g, '');
+        const num = parseFloat(clean);
+        return isNaN(num) ? 0 : num;
+    }
+    return 0;
+};
+
+// --- FUNÇÃO DE DATA SIMPLIFICADA ---
+// Garante compatibilidade com o banco para os dados aparecerem
+const getSaoPauloDateStr = (dateInput: Date | string) => {
     let d: Date;
     if (typeof dateInput === 'string') {
         d = dateInput.includes('T') ? new Date(dateInput) : new Date(dateInput + 'T12:00:00');
     } else {
         d = dateInput;
     }
-
-    // Converte para SP
     const spDate = new Date(d.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
     const year = spDate.getFullYear();
     const month = String(spDate.getMonth() + 1).padStart(2, '0');
     const day = String(spDate.getDate()).padStart(2, '0');
-    
-    // CORREÇÃO CRÍTICA: Se for data final, pega até o último segundo do dia
-    if (isEndOfDay) {
-        return `${year}-${month}-${day}T23:59:59`;
-    }
     return `${year}-${month}-${day}`;
 };
 
@@ -53,7 +61,7 @@ export const Dashboard: React.FC<DashboardProps> = () => {
 
         if (timeFrame === 'DAILY') {
             s = getSaoPauloDateStr(now);
-            e = getSaoPauloDateStr(now, true); // Garante final do dia
+            e = s;
             l = 'Hoje';
         } else if (timeFrame === 'WEEKLY') {
             const start = new Date(now);
@@ -64,23 +72,23 @@ export const Dashboard: React.FC<DashboardProps> = () => {
 
             const end = new Date(start);
             end.setDate(start.getDate() + 6); 
-            e = getSaoPauloDateStr(end, true); // Garante final do dia
+            e = getSaoPauloDateStr(end);
             l = 'Esta Semana';
         } else if (timeFrame === 'MONTHLY') {
             const start = new Date(currentYear, currentMonth, 1);
             const end = new Date(currentYear, currentMonth + 1, 0);
             s = getSaoPauloDateStr(start);
-            e = getSaoPauloDateStr(end, true); // Garante final do dia
+            e = getSaoPauloDateStr(end);
             l = 'Este Mês';
         } else if (timeFrame === 'YEARLY') {
             const start = new Date(currentYear, 0, 1);
             const end = new Date(currentYear, 11, 31);
             s = getSaoPauloDateStr(start);
-            e = getSaoPauloDateStr(end, true); // Garante final do dia
+            e = getSaoPauloDateStr(end);
             l = 'Este Ano';
         } else if (timeFrame === 'CUSTOM') {
             s = customStart;
-            e = customEnd.includes('T') ? customEnd : `${customEnd}T23:59:59`;
+            e = customEnd;
             l = 'Período Personalizado';
         }
         return { startStr: s, endStr: e, dateLabel: l };
@@ -90,7 +98,7 @@ export const Dashboard: React.FC<DashboardProps> = () => {
         const loadData = async () => {
             setLoading(true);
             try {
-                // Carrega dados com tratamento de erro
+                // Carregamento protegido para evitar tela azul se a API falhar
                 const [clientsData, servicesData, expensesData] = await Promise.all([
                     getClients().catch(() => []),
                     getServices(startStr, endStr).catch(() => []),
@@ -101,7 +109,7 @@ export const Dashboard: React.FC<DashboardProps> = () => {
                 setServices(servicesData || []);
                 setExpenses(expensesData || []);
             } catch (error) {
-                console.error("Erro ao carregar dashboard:", error);
+                console.error("Erro ao carregar dados:", error);
             } finally {
                 setLoading(false);
             }
@@ -111,56 +119,64 @@ export const Dashboard: React.FC<DashboardProps> = () => {
         }
     }, [startStr, endStr]);
 
-    // Separação dos dados para cálculo seguro
     const processedData = useMemo(() => {
-        const activeServices = services.filter(s => !s.deletedAt && s.status !== 'Cancelado');
+        // Garante que services seja um array antes de filtrar
+        const safeServices = Array.isArray(services) ? services : [];
+        const safeExpenses = Array.isArray(expenses) ? expenses : [];
 
-        // Para Faturamento: Considera Concluído, Finalizado, Entregue OU Pago
+        // Filtros Base
+        const activeServices = safeServices.filter(s => !s.deletedAt && s.status !== 'Cancelado');
+
+        // Receita: Considera Concluído, Finalizado, Entregue OU Pago
         const revenueServices = activeServices.filter(s => {
             const status = (s.status || '').toLowerCase();
             return status.includes('conclu') || status.includes('final') || status.includes('entregue') || s.paid;
         });
         
-        // Para Pendentes: Ativos que não foram pagos
+        // Pendentes: Serviços ativos que não foram pagos
         const pendingServices = activeServices.filter(s => !s.paid);
         
         return {
             activeServices,
             revenueServices,
             pendingServices,
-            allExpenses: expenses
+            allExpenses: safeExpenses
         };
     }, [services, expenses]);
 
     const stats = useMemo(() => {
         const { revenueServices, pendingServices, allExpenses, activeServices } = processedData;
 
-        // 1. Receita Total (Custo + Espera) - SEM Taxa Extra
-        // CORREÇÃO: Uso de Number() para evitar concatenação de strings
+        // --- CÁLCULOS COM CONVERSÃO SEGURA (CORREÇÃO DO FATURAMENTO) ---
+        
+        // 1. Receita Total = Custo Base + Tempo de Espera
         const totalRevenue = revenueServices.reduce((sum, s) => 
-            sum + Number(s.cost || 0) + Number(s.waitingTime || 0), 0);
+            sum + safeParseFloat(s.cost) + safeParseFloat(s.waitingTime), 0);
         
         // 2. Custo Motoboy
         const totalDriverPay = activeServices.reduce((sum, s) => 
-            sum + Number(s.driverFee || 0), 0);
+            sum + safeParseFloat(s.driverFee), 0);
 
-        // 3. A Receber
+        // 3. A Receber = Custo Base + Espera (dos não pagos)
         const totalPending = pendingServices.reduce((sum, s) => 
-            sum + Number(s.cost || 0) + Number(s.waitingTime || 0), 0);
+            sum + safeParseFloat(s.cost) + safeParseFloat(s.waitingTime), 0);
 
+        // Despesas por Categoria
         const expensesByCat = allExpenses.reduce((acc, curr) => {
-            acc[curr.category] = (acc[curr.category] || 0) + Number(curr.amount || 0);
+            acc[curr.category] = (acc[curr.category] || 0) + safeParseFloat(curr.amount);
             return acc;
         }, {} as Record<string, number>);
 
+        // Receita por Método
         const revenueByMethod = revenueServices.reduce((acc, curr) => {
             const method = curr.paymentMethod || 'PIX';
-            acc[method] = (acc[method] || 0) + Number(curr.cost || 0) + Number(curr.waitingTime || 0);
+            acc[method] = (acc[method] || 0) + safeParseFloat(curr.cost) + safeParseFloat(curr.waitingTime);
             return acc;
         }, { PIX: 0, CASH: 0, CARD: 0 } as Record<string, number>);
 
-        const totalOperationalExpenses = allExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+        const totalOperationalExpenses = allExpenses.reduce((sum, e) => sum + safeParseFloat(e.amount), 0);
         
+        // Lucro Líquido
         const netProfit = totalRevenue - totalDriverPay - totalOperationalExpenses;
 
         return {
@@ -171,7 +187,7 @@ export const Dashboard: React.FC<DashboardProps> = () => {
             netProfit,
             expensesByCat,
             revenueByMethod,
-            totalCount: activeServices.length
+            totalCount: revenueServices.length
         };
     }, [processedData]);
 
@@ -207,9 +223,9 @@ export const Dashboard: React.FC<DashboardProps> = () => {
         };
 
         revenueServices.forEach(s => 
-            addToMap(s.date, Number(s.cost || 0) + Number(s.waitingTime || 0), Number(s.driverFee || 0))
+            addToMap(s.date, safeParseFloat(s.cost) + safeParseFloat(s.waitingTime), safeParseFloat(s.driverFee))
         );
-        allExpenses.forEach(e => addToMap(e.date, 0, Number(e.amount || 0)));
+        allExpenses.forEach(e => addToMap(e.date, 0, safeParseFloat(e.amount)));
 
         return Array.from(dataMap.values())
             .map(e => ({ ...e, profit: e.revenue - e.cost }))
@@ -227,7 +243,7 @@ export const Dashboard: React.FC<DashboardProps> = () => {
 
             const entry = clientStats.get(id) || { name, count: 0, revenue: 0 };
             entry.count += 1;
-            entry.revenue += Number(s.cost || 0) + Number(s.waitingTime || 0);
+            entry.revenue += safeParseFloat(s.cost) + safeParseFloat(s.waitingTime);
             clientStats.set(id, entry);
         });
 
@@ -281,6 +297,7 @@ export const Dashboard: React.FC<DashboardProps> = () => {
                 </div>
             </div>
 
+            {/* CARDS PRINCIPAIS */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
                 {[
                     { title: 'Faturamento', value: stats.totalRevenue, icon: <DollarSign size={48} className="text-blue-600" />, color: 'text-blue-700' },
@@ -302,6 +319,7 @@ export const Dashboard: React.FC<DashboardProps> = () => {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* GRÁFICO */}
                 <div className="lg:col-span-2 bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
                     <h2 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-6">
                         <TrendingUp className="text-slate-500" size={20} /> Evolução Financeira
@@ -328,6 +346,7 @@ export const Dashboard: React.FC<DashboardProps> = () => {
                     </div>
                 </div>
 
+                {/* COLUNA DIREITA */}
                 <div className="flex flex-col gap-6">
                     <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
                         <h2 className="text-lg font-bold text-slate-800 dark:text-white mb-6">Receitas por Método</h2>
