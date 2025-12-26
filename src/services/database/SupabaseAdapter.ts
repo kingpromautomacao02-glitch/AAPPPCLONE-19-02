@@ -13,7 +13,8 @@ export class SupabaseAdapter implements DatabaseAdapter {
         console.log('Supabase Adapter Conectado');
     }
 
-    // --- USERS (CORREÇÃO DE MAPEAMENTO APLICADA AQUI) ---
+    // --- USERS ---
+
     async getUsers(): Promise<User[]> {
         const { data, error } = await this.supabase.from('users').select('*');
         
@@ -22,7 +23,7 @@ export class SupabaseAdapter implements DatabaseAdapter {
             return [];
         }
 
-        // AQUI ESTÁ A MÁGICA: Converte o que vem do banco para o que o app entende
+        // MAEPEAMENTO: snake_case (banco) -> camelCase (app)
         return data.map((u: any) => ({
             id: u.id,
             name: u.name,
@@ -31,7 +32,6 @@ export class SupabaseAdapter implements DatabaseAdapter {
             phone: u.phone,
             role: u.role,
             status: u.status,
-            // Campos críticos que estavam faltando mapeamento:
             companyName: u.company_name,       
             companyAddress: u.company_address, 
             companyCnpj: u.company_cnpj
@@ -39,6 +39,7 @@ export class SupabaseAdapter implements DatabaseAdapter {
     }
 
     async saveUser(user: User): Promise<void> {
+        // MAEPEAMENTO: camelCase (app) -> snake_case (banco)
         const payload = {
             id: user.id,
             name: user.name,
@@ -47,7 +48,7 @@ export class SupabaseAdapter implements DatabaseAdapter {
             phone: user.phone,
             role: user.role,
             status: user.status,
-            company_name: user.companyName,     // Mapeia de volta para salvar
+            company_name: user.companyName,
             company_address: user.companyAddress,
             company_cnpj: user.companyCnpj
         };
@@ -71,6 +72,7 @@ export class SupabaseAdapter implements DatabaseAdapter {
         const { error } = await this.supabase.from('users').update(payload).eq('id', user.id);
         if (error) console.error("Erro ao atualizar usuário:", error.message);
 
+        // Tenta atualizar senha no Auth (se aplicável, falha silenciosamente se não for o user logado)
         if (!error && user.password) {
             try { await this.supabase.auth.updateUser({ password: user.password }); } catch (e) {}
         }
@@ -81,15 +83,21 @@ export class SupabaseAdapter implements DatabaseAdapter {
     }
 
     async login(email: string, pass: string): Promise<User | null> {
+        // Busca direta na tabela users
+        // Nota: Requer que a Policy RLS permita leitura pública ou via função RPC
         const { data, error } = await this.supabase
             .from('users')
             .select('*')
             .eq('email', email)
-            .eq('password', pass)
+            .eq('password', pass) // Em produção, use hash/auth real
             .single();
 
-        if (error || !data) return null;
+        if (error || !data) {
+            console.error("Login falhou:", error?.message);
+            return null;
+        }
 
+        // Mapeia o resultado do login também
         return {
             id: data.id,
             name: data.name,
@@ -105,15 +113,31 @@ export class SupabaseAdapter implements DatabaseAdapter {
     }
 
     // --- CLIENTS ---
-    async getClients(ownerId: string): Promise<Client[]> {
-        const { data, error } = await this.supabase.from('clients').select('*').eq('owner_id', ownerId);
-        if (error) return [];
+
+    async getClients(ownerId?: string): Promise<Client[]> {
+        // Se ownerId for fornecido, filtra. Senão (Admin), traz tudo.
+        let query = this.supabase.from('clients').select('*');
+        if (ownerId) query = query.eq('owner_id', ownerId);
+
+        const { data, error } = await query;
+        if (error) {
+            console.error("Erro clients:", error.message);
+            return [];
+        }
+
         return data.map((d: any) => ({
-            ...d,
+            id: d.id,
             ownerId: d.owner_id,
-            createdAt: d.created_at,
-            contactPerson: d.contact_person,
-            deletedAt: d.deleted_at
+            name: d.name,
+            email: d.email,
+            phone: d.phone,
+            category: d.category,
+            address: d.address,
+            contactPerson: d.contact_person, // mapping
+            requesters: d.requesters,
+            cnpj: d.cnpj,
+            createdAt: d.created_at, // mapping
+            deletedAt: d.deleted_at  // mapping
         })) as Client[];
     }
 
@@ -127,6 +151,7 @@ export class SupabaseAdapter implements DatabaseAdapter {
             category: client.category,
             address: client.address,
             contact_person: client.contactPerson,
+            requesters: client.requesters,
             cnpj: client.cnpj,
             created_at: client.createdAt,
             deleted_at: client.deletedAt || null
@@ -139,18 +164,25 @@ export class SupabaseAdapter implements DatabaseAdapter {
     }
 
     // --- SERVICES ---
+
     async getServices(ownerId?: string, start?: string, end?: string): Promise<ServiceRecord[]> {
         let query = this.supabase.from('services').select('*');
+        
         if (ownerId) query = query.eq('owner_id', ownerId);
         if (start && end) query = query.gte('date', start).lte('date', end);
 
         const { data, error } = await query;
-        if (error) return [];
+        if (error) {
+            console.error("Erro services:", error.message);
+            return [];
+        }
 
         return data.map((d: any) => ({
-            ...d,
+            id: d.id,
             ownerId: d.owner_id,
             clientId: d.client_id,
+            date: d.date,
+            cost: d.cost,
             pickupAddresses: d.pickup_addresses,
             deliveryAddresses: d.delivery_addresses,
             driverFee: d.driver_fee,
@@ -158,8 +190,8 @@ export class SupabaseAdapter implements DatabaseAdapter {
             paymentMethod: d.payment_method,
             paid: d.paid,
             status: d.status,
-            waitingTime: d.waiting_time,
-            extraFee: d.extra_fee,
+            waitingTime: d.waiting_time, // mapping
+            extraFee: d.extra_fee,       // mapping
             manualOrderId: d.manual_order_id,
             deletedAt: d.deleted_at
         })) as ServiceRecord[];
@@ -184,7 +216,8 @@ export class SupabaseAdapter implements DatabaseAdapter {
             manual_order_id: service.manualOrderId,
             deleted_at: service.deletedAt || null
         };
-        await this.supabase.from('services').upsert(payload);
+        const { error } = await this.supabase.from('services').upsert(payload);
+        if (error) console.error("Erro ao salvar serviço:", error.message);
     }
 
     async updateService(service: ServiceRecord, user?: User): Promise<void> {
@@ -211,13 +244,23 @@ export class SupabaseAdapter implements DatabaseAdapter {
     }
 
     // --- EXPENSES ---
+
     async getExpenses(ownerId?: string, start?: string, end?: string): Promise<ExpenseRecord[]> {
         let query = this.supabase.from('expenses').select('*');
         if (ownerId) query = query.eq('owner_id', ownerId);
         if (start && end) query = query.gte('date', start).lte('date', end);
         
-        const { data } = await query;
-        return (data || []).map((d: any) => ({ ...d, ownerId: d.owner_id })) as ExpenseRecord[];
+        const { data, error } = await query;
+        if (error) return [];
+
+        return data.map((d: any) => ({ 
+            id: d.id,
+            ownerId: d.owner_id,
+            category: d.category,
+            amount: d.amount,
+            date: d.date,
+            description: d.description
+        })) as ExpenseRecord[];
     }
 
     async saveExpense(expense: ExpenseRecord): Promise<void> {
@@ -236,6 +279,7 @@ export class SupabaseAdapter implements DatabaseAdapter {
         await this.supabase.from('expenses').delete().eq('id', id);
     }
 
+    // --- UTILS ---
     async getServiceLogs(serviceId: string): Promise<ServiceLog[]> { return []; }
     async requestPasswordReset(email: string) { return { success: true }; }
     async completePasswordReset(email: string, code: string, newPass: string) { return { success: true }; }
