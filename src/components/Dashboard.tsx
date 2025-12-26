@@ -10,7 +10,7 @@ interface DashboardProps {
 
 type TimeFrame = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' | 'CUSTOM';
 
-// --- FUNÇÃO DE DATA (Garante o dia completo) ---
+// --- FUNÇÃO DE DATA CORRIGIDA (Garante final do dia para não perder dados) ---
 const getSaoPauloDateStr = (dateInput: Date | string, isEndOfDay: boolean = false) => {
     let d: Date;
     if (typeof dateInput === 'string') {
@@ -19,12 +19,13 @@ const getSaoPauloDateStr = (dateInput: Date | string, isEndOfDay: boolean = fals
         d = dateInput;
     }
 
+    // Converte para SP
     const spDate = new Date(d.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
     const year = spDate.getFullYear();
     const month = String(spDate.getMonth() + 1).padStart(2, '0');
     const day = String(spDate.getDate()).padStart(2, '0');
     
-    // Se for data final, pega até o último segundo do dia
+    // CORREÇÃO CRÍTICA: Se for data final, pega até o último segundo do dia
     if (isEndOfDay) {
         return `${year}-${month}-${day}T23:59:59`;
     }
@@ -52,7 +53,7 @@ export const Dashboard: React.FC<DashboardProps> = () => {
 
         if (timeFrame === 'DAILY') {
             s = getSaoPauloDateStr(now);
-            e = getSaoPauloDateStr(now, true);
+            e = getSaoPauloDateStr(now, true); // Garante final do dia
             l = 'Hoje';
         } else if (timeFrame === 'WEEKLY') {
             const start = new Date(now);
@@ -63,19 +64,19 @@ export const Dashboard: React.FC<DashboardProps> = () => {
 
             const end = new Date(start);
             end.setDate(start.getDate() + 6); 
-            e = getSaoPauloDateStr(end, true);
+            e = getSaoPauloDateStr(end, true); // Garante final do dia
             l = 'Esta Semana';
         } else if (timeFrame === 'MONTHLY') {
             const start = new Date(currentYear, currentMonth, 1);
             const end = new Date(currentYear, currentMonth + 1, 0);
             s = getSaoPauloDateStr(start);
-            e = getSaoPauloDateStr(end, true);
+            e = getSaoPauloDateStr(end, true); // Garante final do dia
             l = 'Este Mês';
         } else if (timeFrame === 'YEARLY') {
             const start = new Date(currentYear, 0, 1);
             const end = new Date(currentYear, 11, 31);
             s = getSaoPauloDateStr(start);
-            e = getSaoPauloDateStr(end, true);
+            e = getSaoPauloDateStr(end, true); // Garante final do dia
             l = 'Este Ano';
         } else if (timeFrame === 'CUSTOM') {
             s = customStart;
@@ -89,21 +90,18 @@ export const Dashboard: React.FC<DashboardProps> = () => {
         const loadData = async () => {
             setLoading(true);
             try {
-                // Carrega dados com tratamento de erro para não quebrar a tela
+                // Carrega dados com tratamento de erro
                 const [clientsData, servicesData, expensesData] = await Promise.all([
-                    getClients().catch(err => { console.error('Clients error', err); return []; }),
-                    getServices(startStr, endStr).catch(err => { console.error('Services error', err); return []; }),
-                    getExpenses(startStr, endStr).catch(err => { console.error('Expenses error', err); return []; })
+                    getClients().catch(() => []),
+                    getServices(startStr, endStr).catch(() => []),
+                    getExpenses(startStr, endStr).catch(() => [])
                 ]);
                 
-                // Debug: Log para verificar se os dados estão chegando
-                console.log(`Dados carregados: ${servicesData?.length || 0} serviços, ${expensesData?.length || 0} despesas.`);
-
                 setClients(clientsData || []);
                 setServices(servicesData || []);
                 setExpenses(expensesData || []);
             } catch (error) {
-                console.error("Erro crítico ao carregar dashboard:", error);
+                console.error("Erro ao carregar dashboard:", error);
             } finally {
                 setLoading(false);
             }
@@ -115,17 +113,15 @@ export const Dashboard: React.FC<DashboardProps> = () => {
 
     // Separação dos dados para cálculo seguro
     const processedData = useMemo(() => {
-        // Ignora apenas o que foi excluído da lixeira e cancelados
         const activeServices = services.filter(s => !s.deletedAt && s.status !== 'Cancelado');
 
-        // Receita: Considera concluídos ou pagos (Flexibilidade para aparecer dados)
-        // Normaliza o status para lower case para evitar erro de 'Concluído' vs 'Concluido'
+        // Para Faturamento: Considera Concluído, Finalizado, Entregue OU Pago
         const revenueServices = activeServices.filter(s => {
             const status = (s.status || '').toLowerCase();
             return status.includes('conclu') || status.includes('final') || status.includes('entregue') || s.paid;
         });
         
-        // Pendentes: Ativos que não foram pagos
+        // Para Pendentes: Ativos que não foram pagos
         const pendingServices = activeServices.filter(s => !s.paid);
         
         return {
@@ -140,14 +136,15 @@ export const Dashboard: React.FC<DashboardProps> = () => {
         const { revenueServices, pendingServices, allExpenses, activeServices } = processedData;
 
         // 1. Receita Total (Custo + Espera) - SEM Taxa Extra
+        // CORREÇÃO: Uso de Number() para evitar concatenação de strings
         const totalRevenue = revenueServices.reduce((sum, s) => 
             sum + Number(s.cost || 0) + Number(s.waitingTime || 0), 0);
         
-        // 2. Custo Motoboy (Baseado em todos os serviços ativos)
+        // 2. Custo Motoboy
         const totalDriverPay = activeServices.reduce((sum, s) => 
             sum + Number(s.driverFee || 0), 0);
 
-        // 3. A Receber (Custo + Espera) - SEM Taxa Extra
+        // 3. A Receber
         const totalPending = pendingServices.reduce((sum, s) => 
             sum + Number(s.cost || 0) + Number(s.waitingTime || 0), 0);
 
@@ -164,7 +161,6 @@ export const Dashboard: React.FC<DashboardProps> = () => {
 
         const totalOperationalExpenses = allExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
         
-        // Lucro Líquido
         const netProfit = totalRevenue - totalDriverPay - totalOperationalExpenses;
 
         return {
@@ -175,7 +171,7 @@ export const Dashboard: React.FC<DashboardProps> = () => {
             netProfit,
             expensesByCat,
             revenueByMethod,
-            totalCount: activeServices.length // Contagem total para diagnóstico
+            totalCount: activeServices.length
         };
     }, [processedData]);
 
