@@ -217,10 +217,18 @@ export const getServices = async (start?: string, end?: string): Promise<Service
   return await dbAdapter.getServices(user.id, start, end);
 };
 
+// --- CORREÇÃO APLICADA AQUI ---
 export const getServicesByClient = async (clientId: string): Promise<ServiceRecord[]> => {
   const user = getCurrentUser();
   if (!user) return [];
-  return await dbAdapter.getServices(user.id, undefined, undefined, clientId);
+  
+  // Busca os serviços no adaptador
+  const services = await dbAdapter.getServices(user.id, undefined, undefined, clientId);
+  
+  // FILTRO DE SEGURANÇA:
+  // Alguns adaptadores (como LocalStorage) podem ignorar o filtro de clientId e retornar tudo.
+  // Este filtro manual garante que APENAS os serviços deste cliente sejam retornados.
+  return services.filter(s => s.clientId === clientId);
 };
 
 export const saveService = async (service: ServiceRecord) => {
