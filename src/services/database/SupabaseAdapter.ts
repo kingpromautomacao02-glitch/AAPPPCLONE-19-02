@@ -154,12 +154,16 @@ export class SupabaseAdapter implements DatabaseAdapter {
             category: client.category,
             address: client.address,
             contact_person: client.contactPerson,
-            requesters: client.requesters,
+            requesters: client.requesters || [],
             cnpj: client.cnpj,
             created_at: client.createdAt,
             deleted_at: client.deletedAt || null
         };
-        await this.supabase.from('clients').upsert(payload);
+        const { error } = await this.supabase.from('clients').upsert(payload);
+        if (error) {
+            console.error("Erro ao salvar cliente:", error.message, error);
+            throw new Error(`Erro ao salvar cliente: ${error.message}`);
+        }
     }
 
     async deleteClient(id: string): Promise<void> {
