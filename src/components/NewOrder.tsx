@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     ArrowLeft,
     MapPin,
@@ -12,10 +12,14 @@ import {
     Plus,
     Timer,
     Building,
-    List
+    List,
+    Navigation,
+    Loader2
 } from 'lucide-react';
 import { Client, ServiceRecord, PaymentMethod, User as UserType } from '../types';
 import { getClients, saveService } from '../services/storageService';
+import { calculateRouteDistance, isMapboxConfigured } from '../services/distanceService';
+import { AddressAutocomplete } from './AddressAutocomplete';
 import { toast } from 'sonner';
 
 interface NewOrderProps {
@@ -80,6 +84,10 @@ export const NewOrder: React.FC<NewOrderProps> = ({ currentUser }) => {
     const [recentRequesters, setRecentRequesters] = useState<string[]>([]);
     const [loadingRequesters, setLoadingRequesters] = useState(false);
 
+    // Estados para cálculo de distância
+    const [totalDistance, setTotalDistance] = useState<number>(0);
+    const [isCalculatingDistance, setIsCalculatingDistance] = useState(false);
+
     /* --- BUSCAR SOLICITANTES ANTERIORES QUANDO CLIENTE MUDA --- */
     useEffect(() => {
         const fetchRequesters = async () => {
@@ -123,6 +131,37 @@ export const NewOrder: React.FC<NewOrderProps> = ({ currentUser }) => {
         };
         loadClients();
     }, []);
+
+    // Calcular distância quando os endereços mudam
+    useEffect(() => {
+        const calculateDistance = async () => {
+            const validPickups = pickupAddresses.filter(a => a.trim().length > 10);
+            const validDeliveries = deliveryAddresses.filter(a => a.trim().length > 10);
+
+            if (validPickups.length === 0 || validDeliveries.length === 0) {
+                setTotalDistance(0);
+                return;
+            }
+
+            if (!isMapboxConfigured()) {
+                return;
+            }
+
+            setIsCalculatingDistance(true);
+            try {
+                const result = await calculateRouteDistance(validPickups, validDeliveries);
+                setTotalDistance(result.totalDistance);
+            } catch (error) {
+                console.error('Erro ao calcular distância:', error);
+            } finally {
+                setIsCalculatingDistance(false);
+            }
+        };
+
+        // Debounce de 1 segundo para evitar muitas chamadas
+        const timeoutId = setTimeout(calculateDistance, 1000);
+        return () => clearTimeout(timeoutId);
+    }, [pickupAddresses, deliveryAddresses]);
 
     const handleAddAddress = (type: 'pickup' | 'delivery') => {
         if (type === 'pickup') setPickupAddresses([...pickupAddresses, '']);
@@ -222,7 +261,8 @@ export const NewOrder: React.FC<NewOrderProps> = ({ currentUser }) => {
             extraFee: parseCurrency(extraFee),
             paymentMethod,
             paid,
-            status: 'PENDING'
+            status: 'PENDING',
+            totalDistance: totalDistance > 0 ? totalDistance : undefined
         };
 
         try {
@@ -239,6 +279,7 @@ export const NewOrder: React.FC<NewOrderProps> = ({ currentUser }) => {
             setWaitingTime('');
             setExtraFee('');
             setPaid(false);
+            setTotalDistance(0);
         } finally {
             setIsSubmitting(false);
         }
@@ -370,13 +411,12 @@ export const NewOrder: React.FC<NewOrderProps> = ({ currentUser }) => {
                     <div className="space-y-3 p-4 bg-blue-50 dark:bg-blue-900/10 rounded-xl border border-blue-100 dark:border-blue-900/30">
                         <h3 className="font-bold text-blue-600 dark:text-blue-400 text-sm flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-blue-500"></div> Coleta</h3>
                         {pickupAddresses.map((addr, idx) => (
-                            <div key={idx} className="flex gap-2 relative">
-                                <MapPin size={16} className="absolute left-3 top-3 text-blue-500" />
-                                <input
-                                    className="w-full pl-9 pr-36 p-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:border-blue-500 outline-none"
+                            <div key={idx} className="relative">
+                                <AddressAutocomplete
                                     value={addr}
-                                    onChange={e => handleAddressChange('pickup', idx, e.target.value)}
+                                    onChange={(value) => handleAddressChange('pickup', idx, value)}
                                     placeholder="Endereço de retirada"
+                                    iconColor="blue"
                                 />
 
                                 {/* BOTÃO MÁGICO: COPIAR DO CADASTRO */}
@@ -384,15 +424,15 @@ export const NewOrder: React.FC<NewOrderProps> = ({ currentUser }) => {
                                     <button
                                         type="button"
                                         onClick={() => handleAddressChange('pickup', idx, selectedClient.address || '')}
-                                        className="absolute right-8 top-1.5 px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 text-xs font-bold rounded-md flex items-center gap-1 transition-colors border border-blue-300"
+                                        className="absolute right-10 top-1.5 px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 text-xs font-bold rounded-md flex items-center gap-1 transition-colors border border-blue-300 z-10"
                                         title="Usar endereço do cadastro"
                                     >
                                         <Building size={12} />
-                                        Endereço Cliente
+                                        Cliente
                                     </button>
                                 )}
 
-                                {pickupAddresses.length > 1 && <button type="button" onClick={() => handleRemoveAddress('pickup', idx)} className="absolute right-2 top-2.5"><X size={16} className="text-red-400" /></button>}
+                                {pickupAddresses.length > 1 && <button type="button" onClick={() => handleRemoveAddress('pickup', idx)} className="absolute right-2 top-2.5 z-10"><X size={16} className="text-red-400" /></button>}
                             </div>
                         ))}
                         <button type="button" onClick={() => handleAddAddress('pickup')} className="text-xs font-bold text-blue-500 flex items-center gap-1 mt-1"><Plus size={14} /> Adicionar Parada</button>
@@ -402,13 +442,12 @@ export const NewOrder: React.FC<NewOrderProps> = ({ currentUser }) => {
                     <div className="space-y-3 p-4 bg-emerald-50 dark:bg-emerald-900/10 rounded-xl border border-emerald-100 dark:border-emerald-900/30">
                         <h3 className="font-bold text-emerald-600 dark:text-emerald-400 text-sm flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-500"></div> Entrega</h3>
                         {deliveryAddresses.map((addr, idx) => (
-                            <div key={idx} className="flex gap-2 relative">
-                                <MapPin size={16} className="absolute left-3 top-3 text-emerald-500" />
-                                <input
-                                    className="w-full pl-9 pr-36 p-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:border-emerald-500 outline-none"
+                            <div key={idx} className="relative">
+                                <AddressAutocomplete
                                     value={addr}
-                                    onChange={e => handleAddressChange('delivery', idx, e.target.value)}
+                                    onChange={(value) => handleAddressChange('delivery', idx, value)}
                                     placeholder="Endereço de destino"
+                                    iconColor="emerald"
                                 />
 
                                 {/* BOTÃO MÁGICO: COPIAR DO CADASTRO */}
@@ -416,22 +455,45 @@ export const NewOrder: React.FC<NewOrderProps> = ({ currentUser }) => {
                                     <button
                                         type="button"
                                         onClick={() => handleAddressChange('delivery', idx, selectedClient.address || '')}
-                                        className="absolute right-8 top-1.5 px-2 py-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 text-xs font-bold rounded-md flex items-center gap-1 transition-colors border border-emerald-300"
+                                        className="absolute right-10 top-1.5 px-2 py-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 text-xs font-bold rounded-md flex items-center gap-1 transition-colors border border-emerald-300 z-10"
                                         title="Usar endereço do cadastro"
                                     >
                                         <Building size={12} />
-                                        Endereço Cliente
+                                        Cliente
                                     </button>
                                 )}
 
-                                {deliveryAddresses.length > 1 && <button type="button" onClick={() => handleRemoveAddress('delivery', idx)} className="absolute right-2 top-2.5"><X size={16} className="text-red-400" /></button>}
+                                {deliveryAddresses.length > 1 && <button type="button" onClick={() => handleRemoveAddress('delivery', idx)} className="absolute right-2 top-2.5 z-10"><X size={16} className="text-red-400" /></button>}
                             </div>
                         ))}
                         <button type="button" onClick={() => handleAddAddress('delivery')} className="text-xs font-bold text-emerald-500 flex items-center gap-1 mt-1"><Plus size={14} /> Adicionar Parada</button>
                     </div>
                 </div>
 
-                {/* Financeiro (COM MÁSCARAS DE INPUT) */}
+                {/* Box de Distância Total */}
+                {(totalDistance > 0 || isCalculatingDistance) && (
+                    <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-xl border border-purple-200 dark:border-purple-800/50 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-purple-100 dark:bg-purple-800/50 flex items-center justify-center">
+                                <Navigation size={20} className="text-purple-600 dark:text-purple-400" />
+                            </div>
+                            <div>
+                                <span className="block text-xs font-bold text-purple-600 dark:text-purple-400 uppercase">Distância Total do Roteiro</span>
+                                <span className="text-sm text-purple-700/70 dark:text-purple-300/70">Cálculo automático via Mapbox</span>
+                            </div>
+                        </div>
+                        <div className="text-right">
+                            {isCalculatingDistance ? (
+                                <div className="flex items-center gap-2 text-purple-600 dark:text-purple-400">
+                                    <Loader2 size={18} className="animate-spin" />
+                                    <span className="text-sm font-medium">Calculando...</span>
+                                </div>
+                            ) : (
+                                <span className="text-2xl font-bold text-purple-700 dark:text-purple-300">{totalDistance.toFixed(1)} km</span>
+                            )}
+                        </div>
+                    </div>
+                )}
                 <div>
                     <h3 className="font-bold text-slate-800 dark:text-white mb-4 text-sm border-b border-slate-200 dark:border-slate-700 pb-2">Financeiro e Adicionais</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">

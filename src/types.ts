@@ -36,20 +36,21 @@ export interface ServiceRecord {
   id: string;
   ownerId: string;
   clientId: string;
-  pickupAddresses: string[]; 
-  deliveryAddresses: string[]; 
+  pickupAddresses: string[];
+  deliveryAddresses: string[];
   cost: number;
-  driverFee: number; 
+  driverFee: number;
   requesterName: string;
   date: string;
   notes?: string;
   imageUrl?: string;
-  paid: boolean; 
+  paid: boolean;
   paymentMethod?: PaymentMethod;
   status: ServiceStatus;
-  manualOrderId?: string; 
+  manualOrderId?: string;
   waitingTime?: number;
   extraFee?: number;
+  totalDistance?: number; // Distância total do roteiro em KM (não aparece em PDF)
   deletedAt?: string; // Soft Delete
 }
 
@@ -83,7 +84,7 @@ export enum AppView {
   REPORTS = 'REPORTS',
   NEW_ORDER = 'NEW_ORDER',
   ADMIN_PANEL = 'ADMIN_PANEL',
-  SETTINGS = 'SETTINGS', 
+  SETTINGS = 'SETTINGS',
 }
 
 export interface NavState {

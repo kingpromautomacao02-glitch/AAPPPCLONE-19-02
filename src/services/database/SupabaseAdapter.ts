@@ -196,6 +196,7 @@ export class SupabaseAdapter implements DatabaseAdapter {
             waitingTime: d.waiting_time, // mapping
             extraFee: d.extra_fee,       // mapping
             manualOrderId: d.manual_order_id,
+            totalDistance: d.total_distance,
             deletedAt: d.deleted_at
         })) as ServiceRecord[];
     }
@@ -217,6 +218,7 @@ export class SupabaseAdapter implements DatabaseAdapter {
             waiting_time: service.waitingTime,
             extra_fee: service.extraFee,
             manual_order_id: service.manualOrderId,
+            total_distance: service.totalDistance,
             deleted_at: service.deletedAt || null
         };
         const { error } = await this.supabase.from('services').upsert(payload);
@@ -237,6 +239,7 @@ export class SupabaseAdapter implements DatabaseAdapter {
             waiting_time: service.waitingTime,
             extra_fee: service.extraFee,
             manual_order_id: service.manualOrderId,
+            total_distance: service.totalDistance,
             deleted_at: service.deletedAt || null
         };
         await this.supabase.from('services').update(payload).eq('id', service.id);

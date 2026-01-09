@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Client, ServiceRecord, PaymentMethod, User, ServiceLog } from '../types';
 import { saveService, updateService, getServicesByClient, bulkUpdateServices, deleteService, restoreService, getServiceLogs, saveClient } from '../services/storageService';
-import { ArrowLeft, Plus, Calendar, MapPin, Filter, FileSpreadsheet, X, Bike, ChevronDown, FileText, ShieldCheck, Pencil, DollarSign, CheckCircle, AlertCircle, PieChart, List, CheckSquare, Square, MoreHorizontal, User as UserIcon, Building, MinusSquare, Share2, Phone, Mail, Banknote, QrCode, CreditCard, MessageCircle, Loader2, Download, Table, FileDown, Package, Clock, XCircle, Activity, Trash2, AlertTriangle, FileCheck, Timer, Hash, Copy, RotateCcw, Archive, History } from 'lucide-react';
+import { calculateRouteDistance, isMapboxConfigured } from '../services/distanceService';
+import { ArrowLeft, Plus, Calendar, MapPin, Filter, FileSpreadsheet, X, Bike, ChevronDown, FileText, ShieldCheck, Pencil, DollarSign, CheckCircle, AlertCircle, PieChart, List, CheckSquare, Square, MoreHorizontal, User as UserIcon, Building, MinusSquare, Share2, Phone, Mail, Banknote, QrCode, CreditCard, MessageCircle, Loader2, Download, Table, FileDown, Package, Clock, XCircle, Activity, Trash2, AlertTriangle, FileCheck, Timer, Hash, Copy, RotateCcw, Archive, History, Navigation } from 'lucide-react';
 // @ts-ignore
 import { jsPDF } from 'jspdf';
 // @ts-ignore
@@ -10,6 +11,7 @@ import autoTable from 'jspdf-autotable';
 import html2canvas from 'html2canvas';
 import { toast } from 'sonner';
 import { ClientForm } from './ClientForm';
+import { AddressAutocomplete } from './AddressAutocomplete';
 import { safeParseFloat } from '../utils/numberUtils';
 
 interface ClientDetailsProps {
@@ -402,6 +404,42 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialCli
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    // Estados para cálculo de distância
+    const [totalDistance, setTotalDistance] = useState<number>(0);
+    const [isCalculatingDistance, setIsCalculatingDistance] = useState(false);
+
+    // Calcular distância quando os endereços mudam
+    useEffect(() => {
+        if (!showForm) return;
+
+        const calculateDistance = async () => {
+            const validPickups = pickupAddresses.filter(a => a.trim().length > 10);
+            const validDeliveries = deliveryAddresses.filter(a => a.trim().length > 10);
+
+            if (validPickups.length === 0 || validDeliveries.length === 0) {
+                setTotalDistance(0);
+                return;
+            }
+
+            if (!isMapboxConfigured()) {
+                return;
+            }
+
+            setIsCalculatingDistance(true);
+            try {
+                const result = await calculateRouteDistance(validPickups, validDeliveries);
+                setTotalDistance(result.totalDistance);
+            } catch (error) {
+                console.error('Erro ao calcular distância:', error);
+            } finally {
+                setIsCalculatingDistance(false);
+            }
+        };
+
+        const timeoutId = setTimeout(calculateDistance, 1000);
+        return () => clearTimeout(timeoutId);
+    }, [pickupAddresses, deliveryAddresses, showForm]);
+
     const handleAddAddress = (type: 'pickup' | 'delivery') => {
         if (type === 'pickup') {
             setPickupAddresses([...pickupAddresses, '']);
@@ -534,6 +572,7 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialCli
         setServiceDate(getLocalDateStr(new Date()));
         setEditingServiceId(null);
         setShowForm(false);
+        setTotalDistance(0);
     };
 
     const handleSaveService = async (e: React.FormEvent) => {
@@ -570,7 +609,8 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialCli
             date: serviceDate,
             paid: editingServiceId ? isPaid : isPaid,
             paymentMethod: paymentMethod,
-            status: originalService ? originalService.status : 'PENDING'
+            status: originalService ? originalService.status : 'PENDING',
+            totalDistance: totalDistance > 0 ? totalDistance : undefined
         };
 
         try {
@@ -1144,24 +1184,28 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialCli
                                 <div className="space-y-3 p-4 bg-blue-900/10 rounded-xl border border-blue-900/30">
                                     <h3 className="font-bold text-blue-400 text-sm flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-blue-500"></div> Coleta</h3>
                                     {pickupAddresses.map((addr, idx) => (
-                                        <div key={idx} className="flex gap-2 relative">
-                                            <MapPin size={16} className="absolute left-3 top-3 text-blue-500" />
-                                            <input className="w-full pl-9 pr-32 p-2.5 border border-slate-700 rounded-lg bg-slate-800 text-white text-sm focus:border-blue-500 outline-none" value={addr} onChange={e => handleAddressChange('pickup', idx, e.target.value)} placeholder="Endereço de retirada" />
+                                        <div key={idx} className="relative">
+                                            <AddressAutocomplete
+                                                value={addr}
+                                                onChange={(value) => handleAddressChange('pickup', idx, value)}
+                                                placeholder="Endereço de retirada"
+                                                iconColor="blue"
+                                            />
 
                                             {/* BOTÃO COLAR ENDEREÇO CLIENTE */}
                                             {client.address && (
                                                 <button
                                                     type="button"
                                                     onClick={() => handleAddressChange('pickup', idx, client.address || '')}
-                                                    className="absolute right-8 top-1.5 px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-600 text-xs rounded-md flex items-center gap-1 transition-colors border border-blue-200 shadow-sm"
+                                                    className="absolute right-10 top-1.5 px-2 py-1 bg-blue-900/50 hover:bg-blue-800/50 text-blue-400 text-xs rounded-md flex items-center gap-1 transition-colors border border-blue-700 z-10"
                                                     title="Copiar endereço do cadastro"
                                                 >
                                                     <Building size={12} />
-                                                    endereço cliente
+                                                    Cliente
                                                 </button>
                                             )}
 
-                                            {pickupAddresses.length > 1 && <button type="button" onClick={() => handleRemoveAddress('pickup', idx)} className="absolute right-2 top-2.5"><X size={16} className="text-red-400" /></button>}
+                                            {pickupAddresses.length > 1 && <button type="button" onClick={() => handleRemoveAddress('pickup', idx)} className="absolute right-2 top-2.5 z-10"><X size={16} className="text-red-400" /></button>}
                                         </div>
                                     ))}
                                     <button type="button" onClick={() => handleAddAddress('pickup')} className="text-xs font-bold text-blue-400 flex items-center gap-1 mt-1"><Plus size={14} /> Adicionar Parada</button>
@@ -1169,29 +1213,58 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialCli
                                 <div className="space-y-3 p-4 bg-emerald-900/10 rounded-xl border border-emerald-900/30">
                                     <h3 className="font-bold text-emerald-400 text-sm flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-500"></div> Entrega</h3>
                                     {deliveryAddresses.map((addr, idx) => (
-                                        <div key={idx} className="flex gap-2 relative">
-                                            <MapPin size={16} className="absolute left-3 top-3 text-emerald-500" />
-                                            <input className="w-full pl-9 pr-32 p-2.5 border border-slate-700 rounded-lg bg-slate-800 text-white text-sm focus:border-emerald-500 outline-none" value={addr} onChange={e => handleAddressChange('delivery', idx, e.target.value)} placeholder="Endereço de destino" />
+                                        <div key={idx} className="relative">
+                                            <AddressAutocomplete
+                                                value={addr}
+                                                onChange={(value) => handleAddressChange('delivery', idx, value)}
+                                                placeholder="Endereço de destino"
+                                                iconColor="emerald"
+                                            />
 
                                             {/* BOTÃO COLAR ENDEREÇO CLIENTE */}
                                             {client.address && (
                                                 <button
                                                     type="button"
                                                     onClick={() => handleAddressChange('delivery', idx, client.address || '')}
-                                                    className="absolute right-8 top-1.5 px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 text-xs rounded-md flex items-center gap-1 transition-colors border border-emerald-200 shadow-sm"
+                                                    className="absolute right-10 top-1.5 px-2 py-1 bg-emerald-900/50 hover:bg-emerald-800/50 text-emerald-400 text-xs rounded-md flex items-center gap-1 transition-colors border border-emerald-700 z-10"
                                                     title="Copiar endereço do cadastro"
                                                 >
                                                     <Building size={12} />
-                                                    endereço cliente
+                                                    Cliente
                                                 </button>
                                             )}
 
-                                            {deliveryAddresses.length > 1 && <button type="button" onClick={() => handleRemoveAddress('delivery', idx)} className="absolute right-2 top-2.5"><X size={16} className="text-red-400" /></button>}
+                                            {deliveryAddresses.length > 1 && <button type="button" onClick={() => handleRemoveAddress('delivery', idx)} className="absolute right-2 top-2.5 z-10"><X size={16} className="text-red-400" /></button>}
                                         </div>
                                     ))}
                                     <button type="button" onClick={() => handleAddAddress('delivery')} className="text-xs font-bold text-emerald-400 flex items-center gap-1 mt-1"><Plus size={14} /> Adicionar Parada</button>
                                 </div>
                             </div>
+
+                            {/* Box de Distância Total */}
+                            {(totalDistance > 0 || isCalculatingDistance) && (
+                                <div className="p-4 bg-purple-900/20 rounded-xl border border-purple-800/50 flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-full bg-purple-800/50 flex items-center justify-center">
+                                            <Navigation size={20} className="text-purple-400" />
+                                        </div>
+                                        <div>
+                                            <span className="block text-xs font-bold text-purple-400 uppercase">Distância Total do Roteiro</span>
+                                            <span className="text-sm text-purple-300/70">Cálculo automático via Mapbox</span>
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        {isCalculatingDistance ? (
+                                            <div className="flex items-center gap-2 text-purple-400">
+                                                <Loader2 size={18} className="animate-spin" />
+                                                <span className="text-sm font-medium">Calculando...</span>
+                                            </div>
+                                        ) : (
+                                            <span className="text-2xl font-bold text-purple-300">{totalDistance.toFixed(1)} km</span>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Financeiro - Padronizado */}
                             <div className="pt-4 border-t border-slate-700">
