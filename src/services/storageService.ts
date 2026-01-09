@@ -3,6 +3,7 @@ import { DatabaseAdapter } from './database/types';
 import { LocalStorageAdapter } from './database/LocalStorageAdapter';
 import { SupabaseAdapter } from './database/SupabaseAdapter';
 import { FirebaseAdapter } from './database/FirebaseAdapter';
+import { hashPassword, verifyPassword } from '../utils/passwordUtils';
 
 // --- Configuration ---
 const DB_PROVIDER = import.meta.env.VITE_DB_PROVIDER || 'LOCAL';
@@ -148,7 +149,11 @@ export const completePasswordReset = async (email: string, code: string, newPass
 export const registerUser = async (userData: Partial<User>): Promise<{ success: boolean, user?: User, message?: string }> => {
   const users = await dbAdapter.getUsers();
   if (users.find(u => u.email === userData.email)) return { success: false, message: 'Email já cadastrado.' };
-  const newUser: User = { id: crypto.randomUUID(), name: userData.name || '', email: userData.email || '', password: userData.password || '', phone: userData.phone || '', role: 'USER', status: 'ACTIVE' };
+
+  // Hash da senha para segurança
+  const hashedPassword = await hashPassword(userData.password || '');
+
+  const newUser: User = { id: crypto.randomUUID(), name: userData.name || '', email: userData.email || '', password: hashedPassword, phone: userData.phone || '', role: 'USER', status: 'ACTIVE' };
   await dbAdapter.saveUser(newUser);
   localStorage.setItem(STORAGE_KEYS.SESSION, JSON.stringify(newUser));
   return { success: true, user: newUser };
@@ -161,9 +166,16 @@ export const loginUser = async (email: string, pass: string): Promise<{ success:
     // Adapter suporta login seguro (ex: Supabase RPC)
     user = await dbAdapter.login(email, pass);
   } else {
-    // Fallback para adapters simples (ex: LocalStorage)
+    // Fallback para adapters simples - verifica senha com hash
     const users = await dbAdapter.getUsers();
-    user = users.find(u => u.email === email && u.password === pass) || null;
+    const foundUser = users.find(u => u.email === email);
+
+    if (foundUser) {
+      const isValid = await verifyPassword(pass, foundUser.password);
+      if (isValid) {
+        user = foundUser;
+      }
+    }
   }
 
   if (user) {
@@ -221,10 +233,10 @@ export const getServices = async (start?: string, end?: string): Promise<Service
 export const getServicesByClient = async (clientId: string): Promise<ServiceRecord[]> => {
   const user = getCurrentUser();
   if (!user) return [];
-  
+
   // Busca os serviços no adaptador
   const services = await dbAdapter.getServices(user.id, undefined, undefined, clientId);
-  
+
   // FILTRO DE SEGURANÇA:
   // Alguns adaptadores (como LocalStorage) podem ignorar o filtro de clientId e retornar tudo.
   // Este filtro manual garante que APENAS os serviços deste cliente sejam retornados.
