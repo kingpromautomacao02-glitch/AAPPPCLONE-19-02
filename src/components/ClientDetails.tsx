@@ -400,6 +400,7 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialCli
     // Selection State
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleAddAddress = (type: 'pickup' | 'delivery') => {
         if (type === 'pickup') {
@@ -537,12 +538,15 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialCli
 
     const handleSaveService = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (isSubmitting) return; // Bloqueia submissões duplicadas
+        setIsSubmitting(true);
 
         const cleanPickups = pickupAddresses.filter(a => a.trim() !== '');
         const cleanDeliveries = deliveryAddresses.filter(a => a.trim() !== '');
 
         if (cleanPickups.length === 0 || cleanDeliveries.length === 0) {
             alert('Por favor, insira pelo menos um endereço de coleta e um de entrega.');
+            setIsSubmitting(false);
             return;
         }
 
@@ -569,15 +573,19 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialCli
             status: originalService ? originalService.status : 'PENDING'
         };
 
-        if (editingServiceId) {
-            await updateService(serviceData);
-        } else {
-            await saveService(serviceData);
-        }
+        try {
+            if (editingServiceId) {
+                await updateService(serviceData);
+            } else {
+                await saveService(serviceData);
+            }
 
-        const updatedList = await getServicesByClient(client.id);
-        setServices(updatedList);
-        resetForm();
+            const updatedList = await getServicesByClient(client.id);
+            setServices(updatedList);
+            resetForm();
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     const setDateRange = (type: 'today' | 'week' | 'month') => {
@@ -1104,7 +1112,7 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialCli
                     </div>
 
                     {showForm && (
-                        <form onSubmit={(e) => { e.preventDefault(); handleSaveService(e); }} className="bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-700 space-y-6 animate-slide-down">
+                        <form onSubmit={handleSaveService} className="bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-700 space-y-6 animate-slide-down">
                             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-700 pb-4 gap-4">
                                 <h3 className="font-bold text-white text-lg">{editingServiceId ? 'Editar Corrida' : 'Registrar Nova Corrida'}</h3>
 
@@ -1303,7 +1311,9 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialCli
 
                             <div className="pt-4 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-3">
                                 <button type="button" onClick={resetForm} className="px-4 py-2 font-bold text-slate-600 hover:text-white">Cancelar</button>
-                                <button type="submit" className="bg-emerald-600 text-white px-8 py-2 rounded-lg font-bold">Salvar</button>
+                                <button type="submit" disabled={isSubmitting} className="bg-emerald-600 text-white px-8 py-2 rounded-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed">
+                                    {isSubmitting ? 'Salvando...' : 'Salvar'}
+                                </button>
                             </div>
                         </form>
                     )}

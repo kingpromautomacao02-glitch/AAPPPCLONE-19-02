@@ -74,6 +74,7 @@ export const NewOrder: React.FC<NewOrderProps> = ({ currentUser }) => {
 
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('PIX');
     const [paid, setPaid] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     /* --- NOVO ESTADO PARA AS SUGESTÕES --- */
     const [recentRequesters, setRecentRequesters] = useState<string[]>([]);
@@ -187,8 +188,12 @@ export const NewOrder: React.FC<NewOrderProps> = ({ currentUser }) => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (isSubmitting) return; // Bloqueia submissões duplicadas
+        setIsSubmitting(true);
+
         if (!selectedClientId) {
             toast.error('Selecione um cliente.');
+            setIsSubmitting(false);
             return;
         }
 
@@ -197,6 +202,7 @@ export const NewOrder: React.FC<NewOrderProps> = ({ currentUser }) => {
 
         if (cleanPickup.length === 0 || cleanDelivery.length === 0) {
             toast.error('Preencha os endereços.');
+            setIsSubmitting(false);
             return;
         }
 
@@ -219,19 +225,23 @@ export const NewOrder: React.FC<NewOrderProps> = ({ currentUser }) => {
             status: 'PENDING'
         };
 
-        await saveService(newService);
-        toast.success('Corrida registrada!');
+        try {
+            await saveService(newService);
+            toast.success('Corrida registrada!');
 
-        // Reset Form
-        setManualOrderId('');
-        setRequester('');
-        setPickupAddresses(['']);
-        setDeliveryAddresses(['']);
-        setCost('');
-        setDriverFee('');
-        setWaitingTime('');
-        setExtraFee('');
-        setPaid(false);
+            // Reset Form
+            setManualOrderId('');
+            setRequester('');
+            setPickupAddresses(['']);
+            setDeliveryAddresses(['']);
+            setCost('');
+            setDriverFee('');
+            setWaitingTime('');
+            setExtraFee('');
+            setPaid(false);
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     // Cálculos visuais (usando o parser para somar corretamente)
@@ -518,9 +528,9 @@ export const NewOrder: React.FC<NewOrderProps> = ({ currentUser }) => {
                 </div>
 
                 <div className="flex justify-end pt-4">
-                    <button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-3 rounded-lg font-bold shadow-lg transition-colors flex items-center gap-2">
+                    <button type="submit" disabled={isSubmitting} className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-3 rounded-lg font-bold shadow-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                         <CheckCircle size={20} />
-                        Registrar Corrida
+                        {isSubmitting ? 'Salvando...' : 'Registrar Corrida'}
                     </button>
                 </div>
             </form>
