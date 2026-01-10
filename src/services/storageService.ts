@@ -313,14 +313,15 @@ export const deleteService = async (id: string) => {
 
 export const restoreService = async (id: string) => {
   const user = getCurrentUser();
-  const allServicesData = localStorage.getItem(STORAGE_KEYS.SERVICES);
-  const allServices: ServiceRecord[] = allServicesData ? JSON.parse(allServicesData) : [];
+  if (!user) return;
 
-  const serviceIndex = allServices.findIndex(s => s.id === id);
-  if (serviceIndex >= 0) {
-    const service = allServices[serviceIndex];
+  // Busca todos os serviços do usuário (incluindo deletados) usando o adaptador correto
+  const allServices = await dbAdapter.getServices(user.id, undefined, undefined);
+  const service = allServices.find(s => s.id === id);
+
+  if (service) {
     service.deletedAt = undefined;
-    await dbAdapter.updateService(service, user!);
+    await dbAdapter.updateService(service, user);
     createLog(id, 'RESTAURACAO');
   }
 };
