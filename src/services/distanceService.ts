@@ -82,6 +82,7 @@ export const calculateDistanceBetweenPoints = async (
 /**
  * Calcula a distância total de um roteiro com múltiplos endereços
  * Recebe arrays de endereços de coleta e entrega
+ * Usa uma única chamada à API Mapbox para garantir a melhor rota otimizada
  */
 export const calculateRouteDistance = async (
     pickupAddresses: string[],
@@ -115,10 +116,43 @@ export const calculateRouteDistance = async (
             return result;
         }
 
-        // Calcula distância entre cada par de pontos consecutivos
+        // Se temos até 25 pontos, usa uma única chamada para rota otimizada
+        // A API Mapbox suporta até 25 waypoints por requisição
+        if (validCoords.length <= 25) {
+            // Monta as coordenadas no formato: lng,lat;lng,lat;...
+            const waypointsStr = validCoords.map(c => `${c.lng},${c.lat}`).join(';');
+
+            // Chamada única à API com todos os waypoints
+            // - annotations=distance: retorna distância de cada trecho
+            // - overview=false: não precisa da geometria completa
+            // - alternatives=false: sempre retorna a melhor rota
+            // - continue_straight=false: permite curvas para otimizar rota
+            const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${waypointsStr}?access_token=${MAPBOX_TOKEN}&overview=false&annotations=distance&alternatives=false&continue_straight=false`;
+
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (data.routes && data.routes.length > 0) {
+                const route = data.routes[0];
+
+                // A API retorna a distância total da melhor rota
+                result.totalDistance = Math.round((route.distance / 1000) * 10) / 10;
+
+                // Se tiver anotações de distância por leg (trecho)
+                if (route.legs) {
+                    result.distances = route.legs.map((leg: any) =>
+                        Math.round((leg.distance / 1000) * 10) / 10
+                    );
+                }
+
+                return result;
+            }
+        }
+
+        // Fallback: se tiver mais de 25 pontos, calcula trecho a trecho
         for (let i = 0; i < validCoords.length - 1; i++) {
             const distance = await calculateDistanceBetweenPoints(validCoords[i], validCoords[i + 1]);
-            result.distances.push(Math.round(distance * 10) / 10); // Arredonda para 1 casa decimal
+            result.distances.push(Math.round(distance * 10) / 10);
             result.totalDistance += distance;
         }
 
