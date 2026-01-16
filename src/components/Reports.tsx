@@ -1,8 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Client, ServiceRecord, PaymentMethod, User } from '../types';
-import { FileSpreadsheet, Building2, FolderOpen, ChevronRight, FileText, PieChart, CreditCard, Banknote, QrCode, AlertCircle, Table, ShieldCheck, FileDown, Loader2, Calendar } from 'lucide-react';
+import { FileSpreadsheet, Building2, FolderOpen, ChevronRight, FileText, CreditCard, Banknote, QrCode, Table, ShieldCheck, FileDown, Loader2 } from 'lucide-react';
 import { ServiceDocumentModal } from './ClientDetails';
-import { getServices, getExpenses, getClients } from '../services/storageService';
+import { getServices, getClients } from '../services/storageService';
 // @ts-ignore
 import { jsPDF } from 'jspdf';
 // @ts-ignore
@@ -108,7 +108,7 @@ export const Reports: React.FC<ReportsProps> = ({ currentUser }) => {
             const label = d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
             setSelectedMonthLabel(label.charAt(0).toUpperCase() + label.slice(1));
         }
-    }, []);
+    }, [selectedMonthLabel]);
 
     // --- NOVA FUNÇÃO PARA OS BOTÕES DE PERÍODO ---
     const handlePeriodChange = (period: 'today' | 'week' | 'month' | 'year') => {

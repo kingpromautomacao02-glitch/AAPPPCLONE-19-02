@@ -1,0 +1,62 @@
+
+C:\Users\caasa\Desktop\APP-TESTE\src\components\AdminPanel.tsx
+  2:48   warning  'UserStatus' is defined but never used                @typescript-eslint/no-unused-vars
+  3:125  warning  'updateDatabaseConnection' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\caasa\Desktop\APP-TESTE\src\components\ClientDetails.tsx
+     5:198  warning  'MoreHorizontal' is defined but never used  @typescript-eslint/no-unused-vars
+     5:255  warning  'Share2' is defined but never used          @typescript-eslint/no-unused-vars
+     5:357  warning  'Package' is defined but never used         @typescript-eslint/no-unused-vars
+     5:366  warning  'Clock' is defined but never used           @typescript-eslint/no-unused-vars
+     5:373  warning  'XCircle' is defined but never used         @typescript-eslint/no-unused-vars
+     5:382  warning  'Activity' is defined but never used        @typescript-eslint/no-unused-vars
+     5:415  warning  'FileCheck' is defined but never used       @typescript-eslint/no-unused-vars
+   191:17   error    'navigator' is not defined                  no-undef
+   191:39   error    'navigator' is not defined                  no-undef
+   192:23   error    'navigator' is not defined                  no-undef
+   205:104  error    'navigator' is not defined                  no-undef
+   954:26   warning  'type' is defined but never used            @typescript-eslint/no-unused-vars
+  1670:66   error    'HTMLElement' is not defined                no-undef
+  1670:113  error    'HTMLElement' is not defined                no-undef
+
+C:\Users\caasa\Desktop\APP-TESTE\src\components\ClientList.tsx
+   28:66  warning  'services' is defined but never used  @typescript-eslint/no-unused-vars
+   90:22  warning  'error' is defined but never used     @typescript-eslint/no-unused-vars
+  103:22  warning  'error' is defined but never used     @typescript-eslint/no-unused-vars
+
+C:\Users\caasa\Desktop\APP-TESTE\src\components\Dashboard.tsx
+    4:110  warning  'Utensils' is defined but never used                @typescript-eslint/no-unused-vars
+    4:120  warning  'Fuel' is defined but never used                    @typescript-eslint/no-unused-vars
+  113:11   warning  'processedData' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\caasa\Desktop\APP-TESTE\src\components\ImageEditor.tsx
+  2:56  warning  'ImageIcon' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\caasa\Desktop\APP-TESTE\src\components\NewOrder.tsx
+  1:38  warning  'useCallback' is defined but never used  @typescript-eslint/no-unused-vars
+  4:5   warning  'MapPin' is defined but never used       @typescript-eslint/no-unused-vars
+
+C:\Users\caasa\Desktop\APP-TESTE\src\components\Reports.tsx
+    3:74   warning  'PieChart' is defined but never used                                                                                   @typescript-eslint/no-unused-vars
+    3:114  warning  'AlertCircle' is defined but never used                                                                                @typescript-eslint/no-unused-vars
+    3:166  warning  'Calendar' is defined but never used                                                                                   @typescript-eslint/no-unused-vars
+    5:23   warning  'getExpenses' is defined but never used                                                                                @typescript-eslint/no-unused-vars
+  111:8    warning  React Hook useEffect has a missing dependency: 'selectedMonthLabel'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\caasa\Desktop\APP-TESTE\src\components\Settings.tsx
+  1:27  warning  'useEffect' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\caasa\Desktop\APP-TESTE\src\services\database\SupabaseAdapter.ts
+    9:17  warning  '_url' is defined but never used       @typescript-eslint/no-unused-vars
+    9:32  warning  '_key' is defined but never used       @typescript-eslint/no-unused-vars
+  195:47  warning  'user' is defined but never used       @typescript-eslint/no-unused-vars
+  219:49  warning  'user' is defined but never used       @typescript-eslint/no-unused-vars
+  239:37  warning  'user' is defined but never used       @typescript-eslint/no-unused-vars
+  280:26  warning  'serviceId' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\caasa\Desktop\APP-TESTE\src\services\distanceService.ts
+   1:10  warning  'toast' is defined but never used           @typescript-eslint/no-unused-vars
+  10:11  warning  '_GeocodeResult' is defined but never used  @typescript-eslint/no-unused-vars
+
+Ô£û 39 problems (6 errors, 33 warnings)
+

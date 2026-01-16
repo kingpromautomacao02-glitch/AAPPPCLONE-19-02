@@ -13,7 +13,6 @@ interface AuthContextType {
   register: (email: string, password: string, name: string, phone: string) => Promise<{ success: boolean; message?: string }>;
   logout: () => Promise<void>;
   updateProfile: (updates: Partial<User>) => Promise<void>;
-  updateProfile: (updates: Partial<User>) => Promise<void>;
   updatePassword: (password: string) => Promise<{ success: boolean; message?: string }>;
   resetPassword: (email: string) => Promise<{ success: boolean; message?: string }>;
 }
@@ -95,17 +94,53 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     const initAuth = async () => {
       try {
-        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        console.log("Iniciando verificação de autenticação...");
+
+        // Timeout mais agressivo (10s) para não prender o usuário mas dar tempo ao Supabase
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Auth initialization timeout')), 10000)
+        );
+
+        const sessionPromise = async () => {
+          // Força checagem de sessão no servidor/local
+          const { data, error } = await supabase.auth.getSession();
+          if (error) throw error;
+          return data.session;
+        };
+
+        const currentSession = await Promise.race([sessionPromise(), timeoutPromise]) as Session | null;
 
         if (currentSession?.user) {
+          console.log("Sessão encontrada para:", currentSession.user.email);
           setSession(currentSession);
           setSupabaseUser(currentSession.user);
-          const profile = await fetchUserProfile(currentSession.user);
-          setUser(profile);
+
+          try {
+            const profile = await fetchUserProfile(currentSession.user);
+            setUser(profile);
+          } catch (profileError) {
+            console.error("Erro não-crítico ao buscar perfil:", profileError);
+          }
+        } else {
+          console.log("Nenhuma sessão ativa encontrada.");
         }
       } catch (error) {
-        console.error('Auth init error:', error);
+        console.error('CRITICAL Auth init error:', error);
+
+        // Em caso de qualquer erro crítico na inicialização (timeout ou corrupção)
+        // Limpa TUDO relacionado ao Supabase para garantir que o próximo load funcione
+        Object.keys(localStorage).forEach(key => {
+          if (key.startsWith('sb-')) {
+            console.log("Removendo chave suspeita:", key);
+            localStorage.removeItem(key);
+          }
+        });
+
+        // Tenta deslogar oficial para limpar cookies/memória se possível
+        await supabase.auth.signOut().catch(() => { });
+
       } finally {
+        console.log("Finalizando loading de auth.");
         setLoading(false);
       }
     };
@@ -313,7 +348,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     login,
     register,
     logout,
-    updateProfile,
     updateProfile,
     updatePassword,
     resetPassword,

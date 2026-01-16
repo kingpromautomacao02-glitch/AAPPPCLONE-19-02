@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { User, DatabaseConnection, DbProvider, UserStatus } from '../types';
-import { getUsers, updateUserProfile, deleteUser, getDatabaseConnections, saveDatabaseConnection, deleteDatabaseConnection, updateDatabaseConnection, performCloudBackup } from '../services/storageService';
+import { User, DatabaseConnection, DbProvider } from '../types';
+import { getUsers, updateUserProfile, deleteUser, getDatabaseConnections, saveDatabaseConnection, deleteDatabaseConnection, performCloudBackup } from '../services/storageService';
 import { Shield, Users, Database, Plus, Trash2, RefreshCw, CheckCircle, XCircle, AlertTriangle, Lock, Unlock, Play } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -13,7 +13,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ currentAdmin, onImperson
     const [activeTab, setActiveTab] = useState<'USERS' | 'DATABASE'>('USERS');
     const [users, setUsers] = useState<User[]>([]);
     const [isLoading, setIsLoading] = useState(false);
-    
+
     // Database Config State
     const [dbConnections, setDbConnections] = useState<DatabaseConnection[]>([]);
     const [showDbForm, setShowDbForm] = useState(false);
@@ -75,7 +75,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ currentAdmin, onImperson
                 await updateUserProfile(updatedUser);
                 toast.success(`Acesso de ${user.name} liberado.`);
             }
-            
+
             await refreshData();
         } catch (error) {
             toast.error("Falha ao executar a ação.");
@@ -137,45 +137,43 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ currentAdmin, onImperson
 
     return (
         <div className="space-y-6 animate-fade-in relative">
-            
+
             {/* MODAL DE DUPLA CONFIRMAÇÃO */}
             {confirmModal.isOpen && confirmModal.user && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
                     <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-200 dark:border-slate-700 animate-slide-up">
                         <div className="p-6 text-center">
-                            <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${
-                                confirmModal.action === 'DELETE' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'
-                            }`}>
+                            <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${confirmModal.action === 'DELETE' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'
+                                }`}>
                                 <AlertTriangle size={32} />
                             </div>
-                            
+
                             <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-2">
                                 {confirmModal.action === 'DELETE' && 'Excluir Usuário?'}
                                 {confirmModal.action === 'BLOCK' && 'Bloquear Acesso?'}
                                 {confirmModal.action === 'UNBLOCK' && 'Desbloquear Acesso?'}
                             </h3>
-                            
+
                             <p className="text-slate-600 dark:text-slate-400 mb-6">
                                 Você está prestes a realizar uma ação em <strong>{confirmModal.user.name}</strong>.
-                                <br/>
+                                <br />
                                 {confirmModal.action === 'DELETE' && 'Isso removerá permanentemente o usuário e seus dados.'}
                                 {confirmModal.action === 'BLOCK' && 'O usuário não conseguirá mais fazer login.'}
                             </p>
-                            
+
                             <div className="flex gap-3 justify-center">
-                                <button 
+                                <button
                                     onClick={() => setConfirmModal({ isOpen: false, action: null, user: null })}
                                     className="px-5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
                                 >
                                     Cancelar
                                 </button>
-                                <button 
+                                <button
                                     onClick={handleConfirmAction}
-                                    className={`px-5 py-2.5 rounded-lg text-white font-bold shadow-sm flex items-center gap-2 transition-colors ${
-                                        confirmModal.action === 'DELETE' ? 'bg-red-600 hover:bg-red-700' : 
-                                        confirmModal.action === 'BLOCK' ? 'bg-amber-600 hover:bg-amber-700' : 
-                                        'bg-emerald-600 hover:bg-emerald-700'
-                                    }`}
+                                    className={`px-5 py-2.5 rounded-lg text-white font-bold shadow-sm flex items-center gap-2 transition-colors ${confirmModal.action === 'DELETE' ? 'bg-red-600 hover:bg-red-700' :
+                                        confirmModal.action === 'BLOCK' ? 'bg-amber-600 hover:bg-amber-700' :
+                                            'bg-emerald-600 hover:bg-emerald-700'
+                                        }`}
                                 >
                                     Confirmar
                                 </button>
@@ -271,7 +269,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ currentAdmin, onImperson
                                                         >
                                                             <Users size={16} />
                                                         </button>
-                                                        
+
                                                         {/* Botão Bloquear/Desbloquear */}
                                                         {u.status === 'BLOCKED' ? (
                                                             <button

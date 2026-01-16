@@ -27,6 +27,7 @@ export default [
                 process: 'readonly',
                 HTMLDivElement: 'readonly',
                 HTMLInputElement: 'readonly',
+                HTMLElement: 'readonly',
                 MouseEvent: 'readonly',
                 Node: 'readonly',
                 File: 'readonly',
@@ -37,6 +38,7 @@ export default [
                 alert: 'readonly',
                 confirm: 'readonly',
                 NodeJS: 'readonly',
+                navigator: 'readonly',
             },
         },
         plugins: {
@@ -53,7 +55,7 @@ export default [
             // Permite any quando necessário
             '@typescript-eslint/no-explicit-any': 'off',
             // Variáveis não usadas como warning
-            '@typescript-eslint/no-unused-vars': 'warn',
+            '@typescript-eslint/no-unused-vars': ['warn', { 'argsIgnorePattern': '^_', 'varsIgnorePattern': '^_', 'caughtErrorsIgnorePattern': '^_' }],
             'no-unused-vars': 'off',
             // Permite empty functions
             '@typescript-eslint/no-empty-function': 'off',

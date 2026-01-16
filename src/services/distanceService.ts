@@ -1,4 +1,4 @@
-import { toast } from 'sonner';
+
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || '';
 
@@ -7,10 +7,7 @@ interface Coordinates {
     lng: number;
 }
 
-interface GeocodeResult {
-    address: string;
-    coordinates: Coordinates | null;
-}
+
 
 interface DistanceResult {
     distances: number[]; // Distância de cada trecho em km

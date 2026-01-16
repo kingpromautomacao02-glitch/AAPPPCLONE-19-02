@@ -192,7 +192,7 @@ export class SupabaseAdapter implements DatabaseAdapter {
         })) as ServiceRecord[];
     }
 
-    async saveService(service: ServiceRecord, user?: User): Promise<void> {
+    async saveService(service: ServiceRecord, _user?: User): Promise<void> {
         const payload = {
             id: service.id,
             owner_id: service.ownerId,
@@ -216,7 +216,7 @@ export class SupabaseAdapter implements DatabaseAdapter {
         if (error) console.error("Erro ao salvar serviço:", error.message);
     }
 
-    async updateService(service: ServiceRecord, user?: User): Promise<void> {
+    async updateService(service: ServiceRecord, _user?: User): Promise<void> {
         const payload = {
             cost: service.cost,
             status: service.status,
@@ -236,7 +236,7 @@ export class SupabaseAdapter implements DatabaseAdapter {
         await this.supabase.from('services').update(payload).eq('id', service.id);
     }
 
-    async deleteService(id: string, user?: User): Promise<void> {
+    async deleteService(id: string, _user?: User): Promise<void> {
         await this.supabase.from('services').delete().eq('id', id);
     }
 
@@ -277,5 +277,5 @@ export class SupabaseAdapter implements DatabaseAdapter {
     }
 
     // --- UTILS ---
-    async getServiceLogs(serviceId: string): Promise<ServiceLog[]> { return []; }
+    async getServiceLogs(_serviceId: string): Promise<ServiceLog[]> { return []; }
 }

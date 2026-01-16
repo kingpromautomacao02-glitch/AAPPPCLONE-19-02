@@ -1,17 +1,17 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Trash2, 
-  ChevronRight, 
-  Plus, 
-  Search, 
-  LayoutGrid, 
-  List, 
-  User, 
-  Briefcase, 
-  RotateCcw, 
-  Phone, 
-  MapPin 
+import {
+    Trash2,
+    ChevronRight,
+    Plus,
+    Search,
+    LayoutGrid,
+    List,
+    User,
+    Briefcase,
+    RotateCcw,
+    Phone,
+    MapPin
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Client, ServiceRecord, User as UserType } from '../types';
@@ -25,7 +25,7 @@ interface ClientListProps {
     onRefresh: () => void;
 }
 
-export const ClientList: React.FC<ClientListProps> = ({ clients, services, currentUser, onRefresh }) => {
+export const ClientList: React.FC<ClientListProps> = ({ clients, currentUser, onRefresh }) => {
     const navigate = useNavigate();
     const [searchTerm, setSearchTerm] = useState('');
     const [showModal, setShowModal] = useState(false);
@@ -66,7 +66,7 @@ export const ClientList: React.FC<ClientListProps> = ({ clients, services, curre
             requesters: clientData.requesters || [],
             cnpj: clientData.cnpj || '',
             createdAt: clientData.createdAt || new Date().toISOString(),
-            deletedAt: undefined 
+            deletedAt: undefined
         };
 
         try {
@@ -87,7 +87,7 @@ export const ClientList: React.FC<ClientListProps> = ({ clients, services, curre
                 await deleteClient(id);
                 toast.success("Cliente movido para lixeira");
                 onRefresh();
-            } catch (error) {
+            } catch (_error) {
                 toast.error("Erro ao excluir cliente.");
             }
         }
@@ -100,7 +100,7 @@ export const ClientList: React.FC<ClientListProps> = ({ clients, services, curre
                 await restoreClient(id);
                 toast.success("Cliente restaurado");
                 onRefresh();
-            } catch (error) {
+            } catch (_error) {
                 toast.error("Erro ao restaurar cliente.");
             }
         }
@@ -126,8 +126,8 @@ export const ClientList: React.FC<ClientListProps> = ({ clients, services, curre
                             <button
                                 onClick={() => setShowTrash(!showTrash)}
                                 className={`px-3 py-2 rounded-lg font-bold flex items-center gap-2 transition-colors border ${showTrash
-                                        ? 'bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-white border-slate-300 dark:border-slate-600'
-                                        : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50'
+                                    ? 'bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-white border-slate-300 dark:border-slate-600'
+                                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50'
                                     }`}
                                 title={showTrash ? "Voltar para ativos" : "Ver lixeira"}
                             >

@@ -23,7 +23,7 @@ import { ClientList } from './components/ClientList';
 // --- Main App Content (uses contexts) ---
 function AppContent() {
   const { user, loading: authLoading, logout } = useAuth();
-  const { clients, services, expenses, refreshData, loading: dataLoading } = useData();
+  const { clients, services, refreshData } = useData();
 
   // State for impersonation
   const [realAdminUser, setRealAdminUser] = React.useState<User | null>(null);
@@ -101,8 +101,17 @@ function AppContent() {
   // Loading state
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
-        <div className="text-slate-500 dark:text-slate-400">Carregando...</div>
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex flex-col items-center justify-center gap-4">
+        <div className="relative w-16 h-16">
+          <div className="absolute top-0 left-0 w-full h-full border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
+          <div className="absolute top-2 left-2 w-12 h-12 border-4 border-indigo-500/20 border-b-indigo-500 rounded-full animate-spin-slow"></div>
+        </div>
+        <div className="flex flex-col items-center">
+          <h2 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent animate-pulse">
+            LogiTrack CRM
+          </h2>
+          <p className="text-slate-400 text-sm font-medium tracking-widest uppercase mt-1">Iniciando sistema...</p>
+        </div>
       </div>
     );
   }
@@ -158,12 +167,12 @@ function AppContent() {
 
         <div className="p-4 md:p-8 max-w-7xl mx-auto">
           <Routes>
-            <Route path="/" element={<Dashboard clients={clients} services={services} expenses={expenses} />} />
+            <Route path="/" element={<Dashboard />} />
             <Route path="/clients" element={<ClientList clients={clients} services={services} currentUser={displayUser} onRefresh={refreshData} />} />
             <Route path="/clients/:id" element={<ClientDetailsWrapper />} />
             <Route path="/orders/new" element={<NewOrder currentUser={displayUser} />} />
             <Route path="/expenses" element={<Expenses />} />
-            <Route path="/reports" element={<Reports clients={clients} services={services} currentUser={displayUser} onRefresh={refreshData} />} />
+            <Route path="/reports" element={<Reports currentUser={displayUser} />} />
             <Route path="/settings" element={<Settings currentUser={displayUser} onUpdateUser={setDisplayUser} />} />
 
             <Route path="/admin" element={

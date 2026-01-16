@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Client, ServiceRecord, PaymentMethod, User, ServiceLog } from '../types';
 import { saveService, updateService, getServicesByClient, bulkUpdateServices, deleteService, restoreService, getServiceLogs, saveClient } from '../services/storageService';
 import { calculateRouteDistance, isMapboxConfigured } from '../services/distanceService';
-import { ArrowLeft, Plus, Calendar, MapPin, Filter, FileSpreadsheet, X, Bike, ChevronDown, FileText, ShieldCheck, Pencil, DollarSign, CheckCircle, AlertCircle, PieChart, List, CheckSquare, Square, MoreHorizontal, User as UserIcon, Building, MinusSquare, Share2, Phone, Mail, Banknote, QrCode, CreditCard, MessageCircle, Loader2, Download, Table, FileDown, Package, Clock, XCircle, Activity, Trash2, AlertTriangle, FileCheck, Timer, Hash, Copy, RotateCcw, Archive, History, Navigation } from 'lucide-react';
+import { ArrowLeft, Plus, Calendar, MapPin, Filter, FileSpreadsheet, X, Bike, ChevronDown, FileText, ShieldCheck, Pencil, DollarSign, CheckCircle, AlertCircle, PieChart, List, CheckSquare, Square, User as UserIcon, Building, MinusSquare, Phone, Mail, Banknote, QrCode, CreditCard, MessageCircle, Loader2, Download, Table, FileDown, Trash2, AlertTriangle, Timer, Hash, Copy, RotateCcw, Archive, History, Navigation } from 'lucide-react';
 // @ts-ignore
 import { jsPDF } from 'jspdf';
 // @ts-ignore
@@ -951,7 +951,7 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialCli
         document.body.removeChild(link);
     };
 
-    const exportExcel = (type: 'client' | 'internal') => {
+    const exportExcel = (_type: 'client' | 'internal') => {
         setShowExportMenu(false);
         alert("Use o PDF para o relatório oficial com taxas extras.");
     };

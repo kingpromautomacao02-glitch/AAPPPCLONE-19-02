@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { Client, ServiceRecord, ExpenseRecord } from '../types';
-import { TrendingUp, DollarSign, Bike, Wallet, Banknote, QrCode, CreditCard, CalendarDays, Calendar, Filter, Utensils, Fuel, Clock, Trophy, Package } from 'lucide-react';
+import { TrendingUp, DollarSign, Bike, Wallet, Banknote, QrCode, CreditCard, CalendarDays, Calendar, Filter, Clock, Trophy, Package } from 'lucide-react';
 import { getServices, getExpenses, getClients } from '../services/storageService';
 
 interface DashboardProps {
@@ -108,20 +108,17 @@ export const Dashboard: React.FC<DashboardProps> = () => {
         loadData();
     }, []);
 
-
-
-    const processedData = useMemo(() => {
+    const _processedData = useMemo(() => {
         // Garante que services seja um array antes de filtrar
         const safeServices = Array.isArray(services) ? services : [];
         const safeExpenses = Array.isArray(expenses) ? expenses : [];
 
         // Filtros Base
-        const activeServices = safeServices.filter(s => !s.deletedAt && s.status !== 'Cancelado');
+        const activeServices = safeServices.filter(s => !s.deletedAt && s.status !== 'CANCELLED');
 
-        // Receita: Considera Concluído, Finalizado, Entregue OU Pago
+        // Receita: Considera DONE, ou se tiver pago
         const revenueServices = activeServices.filter(s => {
-            const status = (s.status || '').toLowerCase();
-            return status.includes('conclu') || status.includes('final') || status.includes('entregue') || s.paid;
+            return s.status === 'DONE' || s.paid;
         });
 
         // Pendentes: Serviços ativos que não foram pagos
@@ -138,7 +135,7 @@ export const Dashboard: React.FC<DashboardProps> = () => {
     const stats = useMemo(() => {
         // Filtra serviços pela data e remove excluídos/cancelados
         const filteredServices = services.filter(s => {
-            if (!s.date || s.deletedAt || s.status === 'Cancelado') return false;
+            if (!s.date || s.deletedAt || s.status === 'CANCELLED') return false;
             const sDate = s.date.split('T')[0];
             return sDate >= startDate && sDate <= endDate;
         });
@@ -254,6 +251,28 @@ export const Dashboard: React.FC<DashboardProps> = () => {
             byCount: [...list].sort((a, b) => b.count - a.count).slice(0, 5)
         };
     }, [stats, clients]);
+
+    if (loading) {
+        return (
+            <div className="space-y-6 animate-pulse p-4 md:p-0">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
+                    <div className="h-8 w-48 bg-slate-200 dark:bg-slate-800 rounded"></div>
+                    <div className="h-10 w-64 bg-slate-200 dark:bg-slate-800 rounded"></div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {[1, 2, 3, 4].map(i => (
+                        <div key={i} className="h-32 bg-slate-200 dark:bg-slate-800 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800"></div>
+                    ))}
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="lg:col-span-2 h-[400px] bg-slate-200 dark:bg-slate-800 rounded-xl"></div>
+                    <div className="h-[400px] bg-slate-200 dark:bg-slate-800 rounded-xl"></div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6 animate-fade-in">
