@@ -1,21 +1,26 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { SupabaseClient } from '@supabase/supabase-js';
 import { DatabaseAdapter } from './types';
 import { Client, ServiceRecord, ExpenseRecord, User, ServiceLog } from '../../types';
+import { supabase } from '../supabaseClient';
 
 export class SupabaseAdapter implements DatabaseAdapter {
     private supabase: SupabaseClient;
 
-    constructor(url: string, key: string) {
-        this.supabase = createClient(url, key);
+    constructor(_url?: string, _key?: string) {
+        // Usa o client compartilhado para manter a sessão de autenticação
+        this.supabase = supabase;
     }
 
     async initialize() {
-        console.log('Supabase Adapter Conectado');
+        console.log('Supabase Adapter Conectado (Client Compartilhado)');
     }
 
     // --- USERS ---
+    // Note: getUsers is now restricted - only returns current user's profile
+    // Full user list should only be accessible to admins via RLS policies
 
     async getUsers(): Promise<User[]> {
+        // This should be limited by RLS in production
         const { data, error } = await this.supabase.from('users').select('*');
 
         if (error) {
@@ -23,12 +28,10 @@ export class SupabaseAdapter implements DatabaseAdapter {
             return [];
         }
 
-        // MAEPEAMENTO: snake_case (banco) -> camelCase (app)
         return data.map((u: any) => ({
             id: u.id,
             name: u.name,
             email: u.email,
-            password: u.password,
             phone: u.phone,
             role: u.role,
             status: u.status,
@@ -38,13 +41,36 @@ export class SupabaseAdapter implements DatabaseAdapter {
         })) as User[];
     }
 
+    async getUserProfile(userId: string): Promise<User | null> {
+        const { data, error } = await this.supabase
+            .from('users')
+            .select('*')
+            .eq('id', userId)
+            .single();
+
+        if (error || !data) {
+            console.error("Erro ao buscar perfil:", error?.message);
+            return null;
+        }
+
+        return {
+            id: data.id,
+            name: data.name,
+            email: data.email,
+            phone: data.phone,
+            role: data.role,
+            status: data.status,
+            companyName: data.company_name,
+            companyAddress: data.company_address,
+            companyCnpj: data.company_cnpj
+        } as User;
+    }
+
     async saveUser(user: User): Promise<void> {
-        // MAEPEAMENTO: camelCase (app) -> snake_case (banco)
         const payload = {
             id: user.id,
             name: user.name,
             email: user.email,
-            password: user.password,
             phone: user.phone,
             role: user.role,
             status: user.status,
@@ -71,54 +97,15 @@ export class SupabaseAdapter implements DatabaseAdapter {
 
         const { error } = await this.supabase.from('users').update(payload).eq('id', user.id);
         if (error) console.error("Erro ao atualizar usuário:", error.message);
-
-        // Tenta atualizar senha no Auth (se aplicável, falha silenciosamente se não for o user logado)
-        if (!error && user.password) {
-            try { await this.supabase.auth.updateUser({ password: user.password }); } catch (e) { }
-        }
     }
 
     async deleteUser(id: string): Promise<void> {
         await this.supabase.from('users').delete().eq('id', id);
     }
 
-    async login(email: string, pass: string): Promise<User | null> {
-        // Normalização de entrada para evitar erros bobos de espaço ou case
-        const cleanEmail = email.trim().toLowerCase(); // Email sempre minúsculo
-        const cleanPass = pass.trim();                 // Senha apenas sem espaços nas pontas
-
-        // Tenta buscar o usuário
-        const { data, error } = await this.supabase
-            .from('users')
-            .select('*')
-            .eq('email', cleanEmail) // Busca pelo email normalizado
-            .eq('password', cleanPass)
-            .single();
-
-        if (error || !data) {
-            console.warn(`Login falhou para: ${cleanEmail}. Erro: ${error?.message || 'Credenciais inválidas'}`);
-            return null;
-        }
-
-        // Mapeia o resultado do login também
-        return {
-            id: data.id,
-            name: data.name,
-            email: data.email,
-            password: data.password,
-            phone: data.phone,
-            role: data.role,
-            status: data.status,
-            companyName: data.company_name,
-            companyAddress: data.company_address,
-            companyCnpj: data.company_cnpj
-        } as User;
-    }
-
     // --- CLIENTS ---
 
     async getClients(ownerId?: string): Promise<Client[]> {
-        // Se ownerId for fornecido, filtra. Senão (Admin), traz tudo.
         let query = this.supabase.from('clients').select('*');
         if (ownerId) query = query.eq('owner_id', ownerId);
 
@@ -136,11 +123,11 @@ export class SupabaseAdapter implements DatabaseAdapter {
             phone: d.phone,
             category: d.category,
             address: d.address,
-            contactPerson: d.contact_person, // mapping
+            contactPerson: d.contact_person,
             requesters: d.requesters,
             cnpj: d.cnpj,
-            createdAt: d.created_at, // mapping
-            deletedAt: d.deleted_at  // mapping
+            createdAt: d.created_at,
+            deletedAt: d.deleted_at
         })) as Client[];
     }
 
@@ -197,8 +184,8 @@ export class SupabaseAdapter implements DatabaseAdapter {
             paymentMethod: d.payment_method,
             paid: d.paid,
             status: d.status,
-            waitingTime: d.waiting_time, // mapping
-            extraFee: d.extra_fee,       // mapping
+            waitingTime: d.waiting_time,
+            extraFee: d.extra_fee,
             manualOrderId: d.manual_order_id,
             totalDistance: d.total_distance,
             deletedAt: d.deleted_at
@@ -291,6 +278,4 @@ export class SupabaseAdapter implements DatabaseAdapter {
 
     // --- UTILS ---
     async getServiceLogs(serviceId: string): Promise<ServiceLog[]> { return []; }
-    async requestPasswordReset(email: string) { return { success: true }; }
-    async completePasswordReset(email: string, code: string, newPass: string) { return { success: true }; }
 }

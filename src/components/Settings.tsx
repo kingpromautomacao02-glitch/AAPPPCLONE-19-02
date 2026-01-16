@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { User } from '../types';
 import { updateUserProfile } from '../services/storageService';
-import { Save, Building2, User as UserIcon, Mail, Phone, MapPin, CheckCircle } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { Save, Building2, User as UserIcon, Mail, Phone, MapPin, CheckCircle, Lock, Shield } from 'lucide-react';
 
 interface SettingsProps {
   currentUser: User;
@@ -9,6 +10,7 @@ interface SettingsProps {
 }
 
 export const Settings: React.FC<SettingsProps> = ({ currentUser, onUpdateUser }) => {
+  const { updatePassword } = useAuth();
   const [name, setName] = useState(currentUser.name);
   const [phone, setPhone] = useState(currentUser.phone);
 
@@ -16,6 +18,13 @@ export const Settings: React.FC<SettingsProps> = ({ currentUser, onUpdateUser })
   const [companyName, setCompanyName] = useState(currentUser.companyName || '');
   const [companyCnpj, setCompanyCnpj] = useState(currentUser.companyCnpj || '');
   const [companyAddress, setCompanyAddress] = useState(currentUser.companyAddress || '');
+
+  // Password Change State
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState('');
+  const [loadingPassword, setLoadingPassword] = useState(false);
 
   const [success, setSuccess] = useState(false);
 
@@ -38,6 +47,35 @@ export const Settings: React.FC<SettingsProps> = ({ currentUser, onUpdateUser })
 
     // Auto hide success message
     setTimeout(() => setSuccess(false), 3000);
+  };
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError('');
+    setPasswordSuccess('');
+
+    if (newPassword.length < 6) {
+      setPasswordError('A senha deve ter pelo menos 6 caracteres.');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError('As senhas não coincidem.');
+      return;
+    }
+
+    setLoadingPassword(true);
+    const result = await updatePassword(newPassword);
+    setLoadingPassword(false);
+
+    if (result.success) {
+      setPasswordSuccess('Senha alterada com sucesso!');
+      setNewPassword('');
+      setConfirmPassword('');
+      setTimeout(() => setPasswordSuccess(''), 3000);
+    } else {
+      setPasswordError(result.message || 'Erro ao alterar senha.');
+    }
   };
 
   return (
@@ -156,6 +194,65 @@ export const Settings: React.FC<SettingsProps> = ({ currentUser, onUpdateUser })
                   onChange={e => setCompanyAddress(e.target.value)}
                 />
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Security Section */}
+        <div className="p-6 bg-slate-50/50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-700">
+          <h2 className="text-lg font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
+            <Shield size={20} className="text-emerald-600 dark:text-emerald-400" />
+            Segurança
+          </h2>
+
+          <div className="max-w-md">
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Nova Senha</label>
+                <div className="relative">
+                  <Lock size={16} className="absolute left-3 top-3 text-slate-400" />
+                  <input
+                    type="password"
+                    placeholder="Mínimo 6 caracteres"
+                    className="w-full pl-9 p-2.5 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                    value={newPassword}
+                    onChange={e => setNewPassword(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Confirmar Nova Senha</label>
+                <div className="relative">
+                  <Lock size={16} className="absolute left-3 top-3 text-slate-400" />
+                  <input
+                    type="password"
+                    placeholder="Repita a nova senha"
+                    className="w-full pl-9 p-2.5 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                    value={confirmPassword}
+                    onChange={e => setConfirmPassword(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {passwordError && (
+                <p className="text-red-500 text-sm font-medium">{passwordError}</p>
+              )}
+
+              {passwordSuccess && (
+                <p className="text-emerald-500 text-sm font-medium flex items-center gap-1">
+                  <CheckCircle size={14} /> {passwordSuccess}
+                </p>
+              )}
+
+              <button
+                type="button"
+                onClick={handlePasswordChange}
+                disabled={!newPassword || loadingPassword}
+                className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm"
+              >
+                {loadingPassword ? 'Alterando...' : 'Atualizar Senha'}
+              </button>
             </div>
           </div>
         </div>

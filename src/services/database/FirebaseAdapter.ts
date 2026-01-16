@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, getDocs, doc, setDoc, query, where, updateDoc, deleteDoc } from 'firebase/firestore';
-import { getAuth, sendPasswordResetEmail } from 'firebase/auth'; // Importado Auth
+import { getAuth } from 'firebase/auth';
 import { DatabaseAdapter } from './types';
 import { Client, ServiceRecord, ExpenseRecord, User } from '../../types';
 
@@ -84,20 +84,5 @@ export class FirebaseAdapter implements DatabaseAdapter {
     }
     async deleteExpense(id: string): Promise<void> {
         await deleteDoc(doc(this.db, 'expenses', id));
-    }
-
-    // --- PASSWORD RESET (Firebase usa Links, não Códigos) ---
-    async requestPasswordReset(email: string): Promise<{ success: boolean; message?: string }> {
-        try {
-            await sendPasswordResetEmail(this.auth, email);
-            return { success: true, message: 'Link de redefinição enviado para o email.' };
-        } catch (error: any) {
-            return { success: false, message: error.message };
-        }
-    }
-
-    async completePasswordReset(email: string, code: string, newPass: string): Promise<{ success: boolean; message?: string }> {
-        // No Firebase, a redefinição é feita no link enviado por email, não via código na App.
-        return { success: false, message: 'Por favor, verifique o link enviado para o seu email.' };
     }
 }

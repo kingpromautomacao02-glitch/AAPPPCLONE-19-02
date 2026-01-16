@@ -3,7 +3,6 @@ import { DatabaseAdapter } from './database/types';
 import { LocalStorageAdapter } from './database/LocalStorageAdapter';
 import { SupabaseAdapter } from './database/SupabaseAdapter';
 import { FirebaseAdapter } from './database/FirebaseAdapter';
-import { hashPassword, verifyPassword } from '../utils/passwordUtils';
 
 // --- Configuration ---
 const DB_PROVIDER = import.meta.env.VITE_DB_PROVIDER || 'LOCAL';
@@ -33,10 +32,9 @@ const STORAGE_KEYS = {
   CLIENTS: 'logitrack_clients',
   SERVICES: 'logitrack_services',
   EXPENSES: 'logitrack_expenses',
-  USERS: 'logitrack_users',
   SESSION: 'logitrack_session',
   DB_CONNECTIONS: 'logitrack_db_connections',
-  LOGS: 'logitrack_logs' // Chave garantida para logs
+  LOGS: 'logitrack_logs'
 };
 
 const getList = <T>(key: string): T[] => {
@@ -49,9 +47,18 @@ const saveList = <T>(key: string, list: T[]) => {
 };
 
 // --- LOGGING SYSTEM ---
-const getUserName = () => {
-  const user = getCurrentUser();
-  return user ? user.name : 'Sistema';
+// Note: getCurrentUser is now managed by AuthContext, we use localStorage fallback for logging
+const getUserNameFromSession = (): string => {
+  const data = localStorage.getItem(STORAGE_KEYS.SESSION);
+  if (data) {
+    try {
+      const user = JSON.parse(data);
+      return user?.name || 'Sistema';
+    } catch {
+      return 'Sistema';
+    }
+  }
+  return 'Sistema';
 };
 
 const createLog = (serviceId: string, action: 'CRIACAO' | 'EDICAO' | 'EXCLUSAO' | 'RESTAURACAO', changes: any = {}) => {
@@ -60,7 +67,7 @@ const createLog = (serviceId: string, action: 'CRIACAO' | 'EDICAO' | 'EXCLUSAO' 
   const newLog: ServiceLog = {
     id: crypto.randomUUID(),
     serviceId,
-    userName: getUserName(),
+    userName: getUserNameFromSession(),
     action,
     changes,
     createdAt: new Date().toISOString()
@@ -70,53 +77,26 @@ const createLog = (serviceId: string, action: 'CRIACAO' | 'EDICAO' | 'EXCLUSAO' 
   saveList(STORAGE_KEYS.LOGS, logs);
 };
 
-// --- User / Auth ---
-
-export const getUsers = async (): Promise<User[]> => {
-  return await dbAdapter.getUsers();
-};
-
+// --- Session helpers (for compatibility) ---
 export const getCurrentUser = (): User | null => {
   const data = localStorage.getItem(STORAGE_KEYS.SESSION);
   return data ? JSON.parse(data) : null;
 };
 
-// Sincroniza sessão com a nuvem
-export const refreshUserSession = async (): Promise<User | null> => {
-  const currentSession = getCurrentUser();
-  if (!currentSession) return null;
-
-  try {
-    const users = await dbAdapter.getUsers();
-    const freshUser = users.find(u => u.id === currentSession.id);
-
-    if (freshUser) {
-      localStorage.setItem(STORAGE_KEYS.SESSION, JSON.stringify(freshUser));
-      return freshUser;
-    }
-  } catch (error) {
-    console.error("Erro ao atualizar sessão do utilizador:", error);
+export const setCurrentUser = (user: User | null) => {
+  if (user) {
+    localStorage.setItem(STORAGE_KEYS.SESSION, JSON.stringify(user));
+  } else {
+    localStorage.removeItem(STORAGE_KEYS.SESSION);
   }
-  return currentSession;
 };
 
-export const initializeData = async () => {
-  try {
-    const users = await dbAdapter.getUsers();
-    if (users.length === 0) {
-      const admin: User = {
-        id: 'admin-1',
-        name: 'Administrador',
-        email: 'admin@logitrack.com',
-        password: 'admin',
-        phone: '(00) 00000-0000',
-        role: 'ADMIN',
-        status: 'ACTIVE'
-      };
-      await dbAdapter.saveUser(admin);
-      saveList(STORAGE_KEYS.USERS, [admin]);
-    }
-  } catch (e) { console.error(e); }
+export const logoutUser = () => localStorage.removeItem(STORAGE_KEYS.SESSION);
+
+// --- Admin User Functions (for AdminPanel) ---
+
+export const getUsers = async (): Promise<User[]> => {
+  return await dbAdapter.getUsers();
 };
 
 export const updateUserProfile = async (user: User) => {
@@ -127,67 +107,9 @@ export const updateUserProfile = async (user: User) => {
   }
 };
 
-// --- PASSWORD RESET (MODO REAL) ---
-
-export const requestPasswordReset = async (email: string) => {
-  // Se o adapter tiver a função real (Supabase/Firebase), usa ela
-  if (dbAdapter.requestPasswordReset) {
-    return await dbAdapter.requestPasswordReset(email);
-  }
-  // Fallback para LocalStorage (Modo Simulação apenas se não houver nuvem)
-  return { success: true, code: '123456' };
+export const deleteUser = async (id: string) => {
+  await dbAdapter.deleteUser(id);
 };
-
-export const completePasswordReset = async (email: string, code: string, newPass: string) => {
-  if (dbAdapter.completePasswordReset) {
-    return await dbAdapter.completePasswordReset(email, code, newPass);
-  }
-  // Fallback Local
-  return { success: true };
-};
-
-export const registerUser = async (userData: Partial<User>): Promise<{ success: boolean, user?: User, message?: string }> => {
-  const users = await dbAdapter.getUsers();
-  if (users.find(u => u.email === userData.email)) return { success: false, message: 'Email já cadastrado.' };
-
-  // Hash da senha para segurança
-  const hashedPassword = await hashPassword(userData.password || '');
-
-  const newUser: User = { id: crypto.randomUUID(), name: userData.name || '', email: userData.email || '', password: hashedPassword, phone: userData.phone || '', role: 'USER', status: 'ACTIVE' };
-  await dbAdapter.saveUser(newUser);
-  localStorage.setItem(STORAGE_KEYS.SESSION, JSON.stringify(newUser));
-  return { success: true, user: newUser };
-};
-
-export const loginUser = async (email: string, pass: string): Promise<{ success: boolean, user?: User, message?: string }> => {
-  let user: User | null = null;
-
-  if (dbAdapter.login) {
-    // Adapter suporta login seguro (ex: Supabase RPC)
-    user = await dbAdapter.login(email, pass);
-  } else {
-    // Fallback para adapters simples - verifica senha com hash
-    const users = await dbAdapter.getUsers();
-    const foundUser = users.find(u => u.email === email);
-
-    if (foundUser) {
-      const isValid = await verifyPassword(pass, foundUser.password);
-      if (isValid) {
-        user = foundUser;
-      }
-    }
-  }
-
-  if (user) {
-    if (user.status === 'BLOCKED') return { success: false, message: 'Conta bloqueada.' };
-    localStorage.setItem(STORAGE_KEYS.SESSION, JSON.stringify(user));
-    return { success: true, user };
-  }
-  return { success: false, message: 'Credenciais inválidas.' };
-};
-
-export const logoutUser = () => localStorage.removeItem(STORAGE_KEYS.SESSION);
-export const deleteUser = async (id: string) => await dbAdapter.deleteUser(id);
 
 // --- Clients ---
 
@@ -229,17 +151,11 @@ export const getServices = async (start?: string, end?: string): Promise<Service
   return await dbAdapter.getServices(user.id, start, end);
 };
 
-// --- CORREÇÃO APLICADA AQUI ---
 export const getServicesByClient = async (clientId: string): Promise<ServiceRecord[]> => {
   const user = getCurrentUser();
   if (!user) return [];
 
-  // Busca os serviços no adaptador
   const services = await dbAdapter.getServices(user.id, undefined, undefined, clientId);
-
-  // FILTRO DE SEGURANÇA:
-  // Alguns adaptadores (como LocalStorage) podem ignorar o filtro de clientId e retornar tudo.
-  // Este filtro manual garante que APENAS os serviços deste cliente sejam retornados.
   return services.filter(s => s.clientId === clientId);
 };
 
@@ -315,7 +231,6 @@ export const restoreService = async (id: string) => {
   const user = getCurrentUser();
   if (!user) return;
 
-  // Busca todos os serviços do usuário (incluindo deletados) usando o adaptador correto
   const allServices = await dbAdapter.getServices(user.id, undefined, undefined);
   const service = allServices.find(s => s.id === id);
 

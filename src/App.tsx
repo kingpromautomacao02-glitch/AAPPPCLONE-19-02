@@ -1,17 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { EyeOff } from 'lucide-react';
-import { User, Client, ServiceRecord, ExpenseRecord } from './types';
-import {
-  initializeData,
-  getClients,
-  getServices,
-  getExpenses,
-  getCurrentUser,
-  logoutUser,
-  refreshUserSession // <--- IMPORTADO
-} from './services/storageService';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { DataProvider, useData } from './contexts/DataContext';
+import { User } from './types';
+import { setCurrentUser } from './services/storageService';
 
 // Components
 import { Dashboard } from './components/Dashboard';
@@ -26,17 +20,17 @@ import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { ClientList } from './components/ClientList';
 
-function App() {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [realAdminUser, setRealAdminUser] = useState<User | null>(null); // For impersonation
+// --- Main App Content (uses contexts) ---
+function AppContent() {
+  const { user, loading: authLoading, logout } = useAuth();
+  const { clients, services, expenses, refreshData, loading: dataLoading } = useData();
 
-  // Data state
-  const [clients, setClients] = useState<Client[]>([]);
-  const [services, setServices] = useState<ServiceRecord[]>([]);
-  const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
+  // State for impersonation
+  const [realAdminUser, setRealAdminUser] = React.useState<User | null>(null);
+  const [displayUser, setDisplayUser] = React.useState<User | null>(null);
 
   // Dark Mode State
-  const [darkMode, setDarkMode] = useState(() => {
+  const [darkMode, setDarkMode] = React.useState(() => {
     const saved = localStorage.getItem('theme');
     return saved === 'dark';
   });
@@ -52,90 +46,46 @@ function App() {
     }
   }, [darkMode]);
 
-  const toggleDarkMode = () => setDarkMode(!darkMode);
-
-  // Check for session on mount
+  // Sync displayUser with auth user
   useEffect(() => {
-    initializeData(); // Seeds demo data or ADMIN user only if DB is completely empty
-    const user = getCurrentUser();
-    if (user) {
-      setCurrentUser(user);
+    if (user && !realAdminUser) {
+      setDisplayUser(user);
+      setCurrentUser(user); // Keep localStorage in sync for storageService
     }
-  }, []);
+  }, [user, realAdminUser]);
 
-  // Refresh data logic - AGORA SINCRONIZA A SESSÃO TAMBÉM
-  const refreshData = async () => {
-    if (currentUser) {
-      try {
-        // 1. Atualiza o perfil do utilizador (puxa da nuvem para ter os dados da empresa)
-        const freshUser = await refreshUserSession();
-
-        // Se houver diferenças (ex: mudou o nome da empresa noutro PC), atualiza o estado
-        if (freshUser && JSON.stringify(freshUser) !== JSON.stringify(currentUser)) {
-          setCurrentUser(freshUser);
-        }
-
-        // 2. Busca os outros dados
-        const c = await getClients();
-        setClients(c);
-
-        const s = await getServices();
-        setServices(s);
-
-        const e = await getExpenses();
-        setExpenses(e);
-      } catch (error) {
-        console.error("Erro ao sincronizar dados:", error);
-      }
-    }
-  };
-
+  // Refresh data when user changes
   useEffect(() => {
-    if (currentUser) {
+    if (displayUser) {
       refreshData();
     }
-  }, [currentUser]);
+  }, [displayUser, refreshData]);
 
-  const handleLoginSuccess = (user: User) => {
-    setCurrentUser(user);
-  };
+  const toggleDarkMode = () => setDarkMode(!darkMode);
 
-  const handleLogout = () => {
-    logoutUser();
-    setCurrentUser(null);
+  const handleLogout = async () => {
+    await logout();
     setRealAdminUser(null);
-    setClients([]);
-    setServices([]);
-    setExpenses([]);
+    setDisplayUser(null);
   };
 
   // Impersonation Logic
   const startImpersonation = (targetUser: User) => {
-    if (currentUser?.role !== 'ADMIN') return;
-
-    // 1. Salvar o admin real para poder voltar depois
-    setRealAdminUser(currentUser);
-
-    // 2. Atualizar a sessão no LocalStorage para que o storageService (e os logs) 
-    // "pensem" que somos o usuário alvo.
-    localStorage.setItem('logitrack_session', JSON.stringify(targetUser));
-
-    // 3. Atualizar o estado visual
-    setCurrentUser(targetUser);
+    if (displayUser?.role !== 'ADMIN') return;
+    setRealAdminUser(displayUser);
+    setDisplayUser(targetUser);
+    setCurrentUser(targetUser); // Update localStorage for storageService
   };
 
   const stopImpersonation = () => {
     if (realAdminUser) {
-      // 1. Restaurar a sessão do Admin no LocalStorage
-      localStorage.setItem('logitrack_session', JSON.stringify(realAdminUser));
-
-      // 2. Restaurar os estados
+      setDisplayUser(realAdminUser);
       setCurrentUser(realAdminUser);
       setRealAdminUser(null);
     }
   };
 
-  // Wrapper for Client Details to handle Params
+  // Wrapper for Client Details
   const ClientDetailsWrapper = () => {
     const { id } = useParams();
     const client = clients.find(c => c.id === id);
@@ -145,25 +95,24 @@ function App() {
       return <div>Cliente não encontrado</div>;
     }
 
-    return <ClientDetails currentUser={currentUser!} client={client} onBack={() => navigate('/clients')} />;
+    return <ClientDetails currentUser={displayUser!} client={client} onBack={() => navigate('/clients')} />;
   };
 
-  // New Order Wrapper to handle Navigation
-  const NewOrderWrapper = () => {
-    const navigate = useNavigate();
+  // Loading state
+  if (authLoading) {
     return (
-      <NewOrder
-        currentUser={currentUser!}
-      />
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
+        <div className="text-slate-500 dark:text-slate-400">Carregando...</div>
+      </div>
     );
-  };
+  }
 
   // If not logged in, show Auth screen
-  if (!currentUser) {
+  if (!user || !displayUser) {
     return (
       <>
         <Toaster position="top-right" />
-        <Auth onLoginSuccess={handleLoginSuccess} />
+        <Auth />
       </>
     );
   }
@@ -177,7 +126,7 @@ function App() {
         <div className="fixed top-0 left-0 right-0 bg-orange-500 text-white text-xs font-bold py-1 px-4 z-50 flex justify-between items-center shadow-md">
           <div className="flex items-center gap-2">
             <EyeOff size={14} />
-            <span>VOCÊ ESTÁ ACESSANDO COMO: {currentUser.name.toUpperCase()}</span>
+            <span>VOCÊ ESTÁ ACESSANDO COMO: {displayUser.name.toUpperCase()}</span>
           </div>
           <button
             onClick={stopImpersonation}
@@ -189,7 +138,7 @@ function App() {
       )}
 
       <Sidebar
-        currentUser={currentUser}
+        currentUser={displayUser}
         realAdminUser={realAdminUser}
         darkMode={darkMode}
         toggleDarkMode={toggleDarkMode}
@@ -200,7 +149,7 @@ function App() {
       <main className={`flex-1 overflow-y-auto h-screen md:h-full pb-24 md:pb-0 bg-slate-50 dark:bg-slate-900 ${realAdminUser ? 'pt-8 md:pt-0' : ''}`}>
 
         <Header
-          currentUser={currentUser}
+          currentUser={displayUser}
           realAdminUser={realAdminUser}
           darkMode={darkMode}
           toggleDarkMode={toggleDarkMode}
@@ -210,16 +159,16 @@ function App() {
         <div className="p-4 md:p-8 max-w-7xl mx-auto">
           <Routes>
             <Route path="/" element={<Dashboard clients={clients} services={services} expenses={expenses} />} />
-            <Route path="/clients" element={<ClientList clients={clients} services={services} currentUser={currentUser} onRefresh={refreshData} />} />
+            <Route path="/clients" element={<ClientList clients={clients} services={services} currentUser={displayUser} onRefresh={refreshData} />} />
             <Route path="/clients/:id" element={<ClientDetailsWrapper />} />
-            <Route path="/orders/new" element={<NewOrderWrapper />} />
+            <Route path="/orders/new" element={<NewOrder currentUser={displayUser} />} />
             <Route path="/expenses" element={<Expenses />} />
-            <Route path="/reports" element={<Reports clients={clients} services={services} currentUser={currentUser} onRefresh={refreshData} />} />
-            <Route path="/settings" element={<Settings currentUser={currentUser} onUpdateUser={setCurrentUser} />} />
+            <Route path="/reports" element={<Reports clients={clients} services={services} currentUser={displayUser} onRefresh={refreshData} />} />
+            <Route path="/settings" element={<Settings currentUser={displayUser} onUpdateUser={setDisplayUser} />} />
 
             <Route path="/admin" element={
-              currentUser.role === 'ADMIN'
-                ? <AdminPanel currentAdmin={currentUser} onImpersonate={startImpersonation} />
+              displayUser.role === 'ADMIN'
+                ? <AdminPanel currentAdmin={displayUser} onImpersonate={startImpersonation} />
                 : <Navigate to="/" />
             } />
 
@@ -228,6 +177,17 @@ function App() {
         </div>
       </main>
     </div>
+  );
+}
+
+// --- Root App with Providers ---
+function App() {
+  return (
+    <AuthProvider>
+      <DataProvider>
+        <AppContent />
+      </DataProvider>
+    </AuthProvider>
   );
 }
 

@@ -15,7 +15,6 @@
     "@google/genai": "^1.30.0",
     "@supabase/supabase-js": "^2.86.2",
     "@types/react-router-dom": "^5.3.3",
-    "bcryptjs": "^3.0.3",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "firebase": "^12.6.0",
@@ -33,7 +32,6 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
-    "@types/bcryptjs": "^2.4.6",
     "@types/node": "^22.14.0",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",

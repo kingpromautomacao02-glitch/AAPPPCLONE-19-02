@@ -1,50 +1,32 @@
-
 import React, { useState } from 'react';
-import { registerUser, loginUser, requestPasswordReset, completePasswordReset } from '../services/storageService';
-import { Truck, ArrowRight, User, Mail, Lock, Phone, KeyRound, ArrowLeft, ShieldCheck, Eye, EyeOff } from 'lucide-react';
-import { User as UserType } from '../types';
-
-interface AuthProps {
-    onLoginSuccess: (user: UserType) => void;
-}
+import { Truck, ArrowRight, User, Mail, Lock, Phone, ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 type ViewState = 'LOGIN' | 'REGISTER' | 'RECOVERY';
-type RecoveryStep = 'EMAIL' | 'CODE' | 'PASSWORD';
 
-export const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
+export const Auth: React.FC = () => {
+    const { login, register, resetPassword } = useAuth();
     const [view, setView] = useState<ViewState>('LOGIN');
     const [error, setError] = useState('');
     const [successMsg, setSuccessMsg] = useState('');
-
-    // Recovery State
-    const [recoveryStep, setRecoveryStep] = useState<RecoveryStep>('EMAIL');
-    const [resetCode, setResetCode] = useState('');
+    const [loading, setLoading] = useState(false);
 
     // Form State
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [phone, setPhone] = useState('');
     const [password, setPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
 
     // Password Visibility State
     const [showPassword, setShowPassword] = useState(false);
-    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-
-    // Demo Code for UI display
-    const [demoCodeDisplay, setDemoCodeDisplay] = useState<string | null>(null);
 
     const resetForm = () => {
         setError('');
         setSuccessMsg('');
-        setDemoCodeDisplay(null);
         setName('');
         setEmail('');
         setPhone('');
         setPassword('');
-        setConfirmPassword('');
-        setResetCode('');
-        setRecoveryStep('EMAIL');
         setShowPassword(false);
     };
 
@@ -57,80 +39,56 @@ export const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
         e.preventDefault();
         setError('');
         setSuccessMsg('');
+        setLoading(true);
 
-        if (view === 'LOGIN') {
-            const result = await loginUser(email.trim(), password.trim());
-            if (result.success && result.user) {
-                onLoginSuccess(result.user);
-            } else {
-                setError(result.message || 'Erro ao entrar.');
-            }
-        } else if (view === 'REGISTER') {
-            if (!name || !email || !password || !phone) {
-                setError('Por favor, preencha todos os campos.');
-                return;
-            }
+        try {
+            if (view === 'LOGIN') {
+                const result = await login(email.trim(), password.trim());
+                if (!result.success) {
+                    setError(result.message || 'Erro ao entrar.');
+                }
+                // Auth state is managed by AuthContext, no need to call onLoginSuccess
+            } else if (view === 'REGISTER') {
+                if (!name || !email || !password || !phone) {
+                    setError('Por favor, preencha todos os campos.');
+                    setLoading(false);
+                    return;
+                }
 
-            const result = await registerUser({ name, email, password, phone });
-            if (result.success && result.user) {
-                onLoginSuccess(result.user);
-            } else {
-                setError(result.message || 'Erro ao cadastrar.');
+                const result = await register(email, password, name, phone);
+                if (!result.success) {
+                    setError(result.message || 'Erro ao cadastrar.');
+                }
             }
+        } catch (err: any) {
+            setError(err.message || 'Erro inesperado.');
+        } finally {
+            setLoading(false);
         }
     };
 
-    // Recovery Handlers
-    const handleSendCode = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setError('');
-        setDemoCodeDisplay(null);
-
-        const result = await requestPasswordReset(email);
-        if (result.success) {
-            // In a real app, the code goes to email. Here we show it.
-            setDemoCodeDisplay(result.code || null);
-            setRecoveryStep('CODE');
-            setSuccessMsg('Código enviado! (Veja o banner amarelo)');
-        } else {
-            setError(result.message);
-        }
-    };
-
-    const handleVerifyAndReset = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setError('');
-
-        if (password !== confirmPassword) {
-            setError('As senhas não coincidem.');
+    const handleForgotPassword = async () => {
+        if (!email) {
+            setError('Digite seu email para recuperar a senha.');
             return;
         }
 
-        const result = await completePasswordReset(email, resetCode, password);
+        setLoading(true);
+        setError('');
+
+        const result = await resetPassword(email);
+
         if (result.success) {
-            alert('Senha alterada com sucesso! Faça login agora.');
-            switchView('LOGIN');
+            setSuccessMsg('Email de recuperação enviado! Verifique sua caixa de entrada (e spam).');
+            setError('');
         } else {
-            setError(result.message);
+            setError(result.message || 'Erro ao enviar email de recuperação.');
         }
+        setLoading(false);
     };
 
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center p-4 animate-fade-in relative">
-
-            {/* DEMO ONLY: Show Reset Code Notification */}
-            {demoCodeDisplay && (
-                <div className="fixed top-4 left-1/2 -translate-x-1/2 bg-amber-100 border-l-4 border-amber-500 text-amber-700 p-4 rounded shadow-lg z-50 max-w-md animate-slide-down">
-                    <div className="flex items-start gap-3">
-                        <KeyRound size={24} />
-                        <div>
-                            <p className="font-bold">Modo Simulação</p>
-                            <p className="text-sm">Não enviamos email real. Use este código:</p>
-                            <p className="text-2xl font-mono font-bold tracking-widest mt-1 select-all">{demoCodeDisplay}</p>
-                        </div>
-                    </div>
-                </div>
-            )}
 
             <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl flex flex-col md:flex-row overflow-hidden max-w-4xl w-full border border-slate-200 dark:border-slate-700">
 
@@ -175,8 +133,7 @@ export const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
                             <>
                                 <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">Recuperar Senha</h2>
                                 <p className="text-slate-500 dark:text-slate-400 mb-8">
-                                    {recoveryStep === 'EMAIL' && 'Informe seu email para receber o código.'}
-                                    {recoveryStep === 'CODE' && 'Digite o código recebido e sua nova senha.'}
+                                    Entre em contato com o administrador para redefinir sua senha.
                                 </p>
                             </>
                         )}
@@ -248,7 +205,7 @@ export const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
                                         {view === 'LOGIN' && (
                                             <button
                                                 type="button"
-                                                onClick={() => switchView('RECOVERY')}
+                                                onClick={handleForgotPassword}
                                                 className="text-xs text-blue-600 dark:text-blue-400 font-bold hover:underline"
                                             >
                                                 Esqueci minha senha
@@ -276,117 +233,18 @@ export const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
 
                                 <button
                                     type="submit"
-                                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 mt-2"
+                                    disabled={loading}
+                                    className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-bold py-3 rounded-lg transition-colors flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 mt-2"
                                 >
-                                    {view === 'LOGIN' ? 'Entrar na Plataforma' : 'Criar Conta'}
-                                    <ArrowRight size={18} />
+                                    {loading ? 'Carregando...' : (view === 'LOGIN' ? 'Entrar na Plataforma' : 'Criar Conta')}
+                                    {!loading && <ArrowRight size={18} />}
                                 </button>
                             </form>
                         )}
 
-                        {/* RECOVERY FORM */}
+                        {/* RECOVERY VIEW */}
                         {view === 'RECOVERY' && (
                             <div className="animate-fade-in">
-                                {recoveryStep === 'EMAIL' ? (
-                                    <form onSubmit={handleSendCode} className="space-y-4">
-                                        <div className="space-y-1">
-                                            <label className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase">Email da Conta</label>
-                                            <div className="relative">
-                                                <Mail size={18} className="absolute left-3 top-3 text-slate-400" />
-                                                <input
-                                                    type="email"
-                                                    className="auth-input w-full pl-10 p-2.5 border-b-2 border-slate-200 dark:border-slate-600 focus:border-blue-600 dark:focus:border-blue-400 outline-none text-slate-800 dark:text-white placeholder-slate-400 transition-colors"
-                                                    placeholder="seu@email.com"
-                                                    value={email}
-                                                    onChange={e => setEmail(e.target.value)}
-                                                    required
-                                                />
-                                            </div>
-                                        </div>
-                                        <button
-                                            type="submit"
-                                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors shadow-md"
-                                        >
-                                            Enviar Código
-                                        </button>
-                                    </form>
-                                ) : (
-                                    <form onSubmit={handleVerifyAndReset} className="space-y-4 animate-slide-up">
-                                        <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-sm text-blue-700 dark:text-blue-300 mb-4">
-                                            Enviamos um código para <strong>{email}</strong>.
-                                        </div>
-
-                                        <div className="space-y-1">
-                                            <label className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase">Código de 6 Dígitos</label>
-                                            <div className="relative">
-                                                <KeyRound size={18} className="absolute left-3 top-3 text-slate-400" />
-                                                <input
-                                                    type="text"
-                                                    className="auth-input w-full pl-10 p-2.5 border-b-2 border-slate-200 dark:border-slate-600 focus:border-blue-600 dark:focus:border-blue-400 outline-none text-slate-800 dark:text-white placeholder-slate-400 transition-colors font-mono tracking-widest"
-                                                    placeholder="000000"
-                                                    value={resetCode}
-                                                    onChange={e => setResetCode(e.target.value)}
-                                                    required
-                                                    maxLength={6}
-                                                />
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-1">
-                                            <label className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase">Nova Senha</label>
-                                            <div className="relative">
-                                                <Lock size={18} className="absolute left-3 top-3 text-slate-400" />
-                                                <input
-                                                    type={showPassword ? "text" : "password"}
-                                                    className="auth-input w-full pl-10 pr-10 p-2.5 border-b-2 border-slate-200 dark:border-slate-600 focus:border-blue-600 dark:focus:border-blue-400 outline-none text-slate-800 dark:text-white placeholder-slate-400 transition-colors"
-                                                    placeholder="Nova senha"
-                                                    value={password}
-                                                    onChange={e => setPassword(e.target.value)}
-                                                    required
-                                                    minLength={4}
-                                                />
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setShowPassword(!showPassword)}
-                                                    className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 focus:outline-none"
-                                                >
-                                                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-1">
-                                            <label className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase">Confirmar Nova Senha</label>
-                                            <div className="relative">
-                                                <ShieldCheck size={18} className="absolute left-3 top-3 text-slate-400" />
-                                                <input
-                                                    type={showConfirmPassword ? "text" : "password"}
-                                                    className="auth-input w-full pl-10 pr-10 p-2.5 border-b-2 border-slate-200 dark:border-slate-600 focus:border-blue-600 dark:focus:border-blue-400 outline-none text-slate-800 dark:text-white placeholder-slate-400 transition-colors"
-                                                    placeholder="Confirme a senha"
-                                                    value={confirmPassword}
-                                                    onChange={e => setConfirmPassword(e.target.value)}
-                                                    required
-                                                    minLength={4}
-                                                />
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                                    className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 focus:outline-none"
-                                                >
-                                                    {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        <button
-                                            type="submit"
-                                            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-lg transition-colors shadow-md"
-                                        >
-                                            Redefinir Senha
-                                        </button>
-                                    </form>
-                                )}
-
                                 <div className="mt-4 text-center">
                                     <button
                                         type="button"
@@ -400,7 +258,7 @@ export const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
                             </div>
                         )}
 
-                        {/* Footer Links (Only show in Login/Register modes) */}
+                        {/* Footer Links */}
                         {(view === 'LOGIN' || view === 'REGISTER') && (
                             <div className="mt-6 text-center border-t border-slate-100 dark:border-slate-700 pt-6">
                                 <p className="text-sm text-slate-600 dark:text-slate-400">

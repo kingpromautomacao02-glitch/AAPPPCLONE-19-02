@@ -5,7 +5,6 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  password: string;
   phone: string;
   role: UserRole;
   status: UserStatus;
@@ -111,11 +110,7 @@ export interface DatabaseAdapter {
   saveUser(user: User): Promise<void>;
   updateUser(user: User): Promise<void>;
   deleteUser(id: string): Promise<void>;
-  login?(email: string, pass: string): Promise<User | null>; // Novo método para login seguro
 
-  // Password Reset
-  requestPasswordReset?(email: string): Promise<{ success: boolean; message?: string }>;
-  completePasswordReset?(email: string, code: string, newPass: string): Promise<{ success: boolean; message?: string }>;
 
   // Clients
   getClients(ownerId: string): Promise<Client[]>;
