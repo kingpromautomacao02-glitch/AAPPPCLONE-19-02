@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from 'react';
 import { Client, ServiceRecord, ExpenseRecord } from '../types';
 import { useAuth } from './AuthContext';
 import {
@@ -14,6 +14,7 @@ import {
     restoreService as restoreServiceService,
     saveExpense as saveExpenseService,
     deleteExpense as deleteExpenseService,
+    setCurrentUser,
 } from '../services/storageService';
 
 // --- Types ---
@@ -50,6 +51,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     const [services, setServices] = useState<ServiceRecord[]>([]);
     const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
     const [loading, setLoading] = useState(false);
+    const [hasLoadedInitialData, setHasLoadedInitialData] = useState(false);
 
     // --- Refresh all data ---
     const refreshData = useCallback(async () => {
@@ -62,6 +64,9 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
 
         setLoading(true);
         try {
+            // Garante que o storageService tenha o usuário atual sincronizado
+            setCurrentUser(user);
+
             const [c, s, e] = await Promise.all([
                 getClients(),
                 getServices(),
@@ -76,6 +81,23 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
             setLoading(false);
         }
     }, [user]);
+
+    // Carrega dados automaticamente quando o usuário muda
+    useEffect(() => {
+        if (user && !hasLoadedInitialData) {
+            // Sincroniza o usuário no localStorage antes de carregar dados
+            setCurrentUser(user);
+            refreshData().then(() => {
+                setHasLoadedInitialData(true);
+            });
+        } else if (!user) {
+            // Limpa dados quando usuário desloga
+            setClients([]);
+            setServices([]);
+            setExpenses([]);
+            setHasLoadedInitialData(false);
+        }
+    }, [user, hasLoadedInitialData, refreshData]);
 
     // --- Client Operations ---
     const saveClient = async (client: Client) => {

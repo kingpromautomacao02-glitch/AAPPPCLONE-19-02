@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { User } from '../types';
 import { clsx } from 'clsx';
+import { SyncStatusIndicator } from './SyncStatusIndicator';
 
 interface SidebarProps {
     currentUser: User;
@@ -31,9 +32,9 @@ export function Sidebar({ currentUser, realAdminUser, darkMode, toggleDarkMode, 
                 {/* ÁREA DO LOGO */}
                 <div className="h-10 w-10 relative flex-shrink-0">
                     {!imgError ? (
-                        <img 
-                            src="/logo.png" 
-                            alt="LogiTrack Logo" 
+                        <img
+                            src="/logo.png"
+                            alt="LogiTrack Logo"
                             className="h-full w-full object-contain"
                             onError={() => setImgError(true)}
                         />
@@ -118,8 +119,10 @@ export function Sidebar({ currentUser, realAdminUser, darkMode, toggleDarkMode, 
                 )}
             </div>
 
-            {/* Desktop Footer - Dark Mode & Logout */}
+            {/* Desktop Footer - Sync Status, Dark Mode & Logout */}
             <div className="hidden md:block p-4 border-t border-slate-100 dark:border-slate-700 mt-auto space-y-2">
+                {/* Sync Status Indicator */}
+                <SyncStatusIndicator compact />
                 <button
                     onClick={toggleDarkMode}
                     className="w-full flex items-center gap-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 p-2 rounded-lg transition-colors font-medium text-sm"

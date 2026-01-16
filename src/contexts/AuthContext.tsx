@@ -96,9 +96,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       try {
         console.log("Iniciando verificação de autenticação...");
 
-        // Timeout mais agressivo (10s) para não prender o usuário mas dar tempo ao Supabase
+        // Timeout de 5s para não prender o usuário
         const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Auth initialization timeout')), 10000)
+          setTimeout(() => reject(new Error('Auth initialization timeout')), 5000)
         );
 
         const sessionPromise = async () => {

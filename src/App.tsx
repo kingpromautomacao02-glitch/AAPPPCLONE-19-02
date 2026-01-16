@@ -4,6 +4,7 @@ import { Toaster } from 'sonner';
 import { EyeOff } from 'lucide-react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { DataProvider, useData } from './contexts/DataContext';
+import { SyncProvider } from './contexts/SyncContext';
 import { User } from './types';
 import { setCurrentUser } from './services/storageService';
 
@@ -19,6 +20,7 @@ import { Settings } from './components/Settings';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { ClientList } from './components/ClientList';
+import { OfflineBanner } from './components/OfflineBanner';
 
 // --- Main App Content (uses contexts) ---
 function AppContent() {
@@ -54,12 +56,8 @@ function AppContent() {
     }
   }, [user, realAdminUser]);
 
-  // Refresh data when user changes
-  useEffect(() => {
-    if (displayUser) {
-      refreshData();
-    }
-  }, [displayUser, refreshData]);
+  // Nota: O DataContext agora carrega dados automaticamente quando o usuário muda
+  // Não é mais necessário chamar refreshData() manualmente aqui
 
   const toggleDarkMode = () => setDarkMode(!darkMode);
 
@@ -129,6 +127,7 @@ function AppContent() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex flex-col md:flex-row font-sans text-slate-900 dark:text-slate-100 md:h-screen md:overflow-hidden">
       <Toaster position="top-right" richColors />
+      <OfflineBanner />
 
       {/* Impersonation Warning Banner */}
       {realAdminUser && (
@@ -193,9 +192,11 @@ function AppContent() {
 function App() {
   return (
     <AuthProvider>
-      <DataProvider>
-        <AppContent />
-      </DataProvider>
+      <SyncProvider>
+        <DataProvider>
+          <AppContent />
+        </DataProvider>
+      </SyncProvider>
     </AuthProvider>
   );
 }

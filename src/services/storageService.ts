@@ -1,7 +1,7 @@
 import { Client, ServiceRecord, ExpenseRecord, User, DatabaseConnection, ServiceLog } from '../types';
 import { DatabaseAdapter } from './database/types';
 import { LocalStorageAdapter } from './database/LocalStorageAdapter';
-import { SupabaseAdapter } from './database/SupabaseAdapter';
+import { HybridAdapter } from './database/HybridAdapter';
 import { FirebaseAdapter } from './database/FirebaseAdapter';
 
 // --- Configuration ---
@@ -10,7 +10,8 @@ let dbAdapter: DatabaseAdapter;
 
 switch (DB_PROVIDER) {
   case 'SUPABASE':
-    dbAdapter = new SupabaseAdapter(
+    // HybridAdapter combines Supabase with offline storage
+    dbAdapter = new HybridAdapter(
       import.meta.env.VITE_SUPABASE_URL || '',
       import.meta.env.VITE_SUPABASE_ANON_KEY || ''
     );

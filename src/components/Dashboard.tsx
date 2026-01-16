@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { Client, ServiceRecord, ExpenseRecord } from '../types';
 import { TrendingUp, DollarSign, Bike, Wallet, Banknote, QrCode, CreditCard, CalendarDays, Calendar, Filter, Clock, Trophy, Package } from 'lucide-react';
-import { getServices, getExpenses, getClients } from '../services/storageService';
+import { useData } from '../contexts/DataContext';
 
 interface DashboardProps {
     currentUser?: any;
@@ -33,10 +33,11 @@ const getSaoPauloDateStr = (dateInput: Date | string) => {
 };
 
 export const Dashboard: React.FC<DashboardProps> = () => {
-    const [clients, setClients] = useState<Client[]>([]);
-    const [services, setServices] = useState<ServiceRecord[]>([]);
-    const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
-    const [loading, setLoading] = useState(true);
+    // Usa o DataContext em vez de carregar diretamente
+    const { clients, services, expenses, loading: dataLoading, refreshData } = useData();
+
+    // Estado local apenas para controle de primeiro carregamento
+    const [initialLoading, setInitialLoading] = useState(true);
 
     const [timeFrame, setTimeFrame] = useState<TimeFrame>('MONTHLY');
     const [customStart, setCustomStart] = useState(getSaoPauloDateStr(new Date()));
@@ -87,26 +88,20 @@ export const Dashboard: React.FC<DashboardProps> = () => {
         return { startDate: s, endDate: e, label: l };
     }, [timeFrame, customStart, customEnd]);
 
+    // Carrega dados na montagem e quando não há dados
     useEffect(() => {
-        const loadData = async () => {
-            setLoading(true);
-            try {
-                const [allClients, allServices, allExpenses] = await Promise.all([
-                    getClients(),
-                    getServices(),
-                    getExpenses()
-                ]);
-                setClients(allClients || []);
-                setServices(allServices || []);
-                setExpenses(allExpenses || []);
-            } catch (error) {
-                console.error("Erro ao carregar dashboard:", error);
-            } finally {
-                setLoading(false);
+        const loadInitialData = async () => {
+            // Se não há dados ainda, força um refresh
+            if (clients.length === 0 && services.length === 0 && expenses.length === 0) {
+                await refreshData();
             }
+            setInitialLoading(false);
         };
-        loadData();
-    }, []);
+        loadInitialData();
+    }, [clients.length, services.length, expenses.length, refreshData]);
+
+    // Determina estado de loading combinado
+    const loading = initialLoading || dataLoading;
 
     const _processedData = useMemo(() => {
         // Garante que services seja um array antes de filtrar
