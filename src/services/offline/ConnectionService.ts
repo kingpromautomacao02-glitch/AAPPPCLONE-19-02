@@ -52,17 +52,30 @@ class ConnectionService {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-                const response = await fetch(this.pingUrl, {
+                // Use /rest/v1/ endpoint which returns a valid response
+                const pingEndpoint = this.pingUrl.endsWith('/')
+                    ? `${this.pingUrl}rest/v1/`
+                    : `${this.pingUrl}/rest/v1/`;
+
+                const response = await fetch(pingEndpoint, {
                     method: 'HEAD',
                     mode: 'no-cors',
                     signal: controller.signal
                 });
 
                 clearTimeout(timeoutId);
+                // If we got here, server is reachable
                 this.handleConnectionChange(true);
                 return true;
             } catch (error) {
-                // Network error - we're offline or server is unreachable
+                // Network error - but don't mark as offline just because ping failed
+                // The server might be reachable for auth but not for REST
+                console.warn('ConnectionService: Ping failed, trusting navigator.onLine');
+                // Trust navigator.onLine instead of marking offline
+                if (navigator.onLine) {
+                    this.handleConnectionChange(true);
+                    return true;
+                }
                 this.handleConnectionChange(false);
                 return false;
             }

@@ -13,7 +13,8 @@ import {
     Building,
     List,
     Navigation,
-    Loader2
+    Loader2,
+    MapPin
 } from 'lucide-react';
 import { Client, ServiceRecord, PaymentMethod, User as UserType } from '../types';
 import { getClients, saveService } from '../services/storageService';
@@ -87,6 +88,12 @@ export const NewOrder: React.FC<NewOrderProps> = ({ currentUser }) => {
     const [totalDistance, setTotalDistance] = useState<number>(0);
     const [isCalculatingDistance, setIsCalculatingDistance] = useState(false);
 
+    /* --- NOVOS ESTADOS PARA ENDEREÇOS RECENTES --- */
+    const [recentPickupAddresses, setRecentPickupAddresses] = useState<string[]>([]);
+    const [recentDeliveryAddresses, setRecentDeliveryAddresses] = useState<string[]>([]);
+    const [showPickupAddressList, setShowPickupAddressList] = useState<number | null>(null);
+    const [showDeliveryAddressList, setShowDeliveryAddressList] = useState<number | null>(null);
+
     /* --- BUSCAR SOLICITANTES ANTERIORES QUANDO CLIENTE MUDA --- */
     useEffect(() => {
         const fetchRequesters = async () => {
@@ -113,6 +120,32 @@ export const NewOrder: React.FC<NewOrderProps> = ({ currentUser }) => {
                 const allNames = Array.from(new Set([...historyNames, ...registeredNames])).sort();
 
                 setRecentRequesters(allNames);
+
+                // 4. Buscar endereços recentes de coleta e entrega
+                const allPickups: string[] = [];
+                const allDeliveries: string[] = [];
+
+                services.forEach(s => {
+                    if (s.pickupAddresses) {
+                        s.pickupAddresses.forEach(addr => {
+                            if (addr && addr.trim().length > 5) {
+                                allPickups.push(addr.trim());
+                            }
+                        });
+                    }
+                    if (s.deliveryAddresses) {
+                        s.deliveryAddresses.forEach(addr => {
+                            if (addr && addr.trim().length > 5) {
+                                allDeliveries.push(addr.trim());
+                            }
+                        });
+                    }
+                });
+
+                // Remover duplicados e ordenar
+                setRecentPickupAddresses(Array.from(new Set(allPickups)).sort());
+                setRecentDeliveryAddresses(Array.from(new Set(allDeliveries)).sort());
+
             } catch (error) {
                 console.error("Erro ao buscar solicitantes:", error);
             } finally {
@@ -408,22 +441,69 @@ export const NewOrder: React.FC<NewOrderProps> = ({ currentUser }) => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* COLETA */}
                     <div className="space-y-3 p-4 bg-blue-50 dark:bg-blue-900/10 rounded-xl border border-blue-100 dark:border-blue-900/30">
-                        <h3 className="font-bold text-blue-600 dark:text-blue-400 text-sm flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-blue-500"></div> Coleta</h3>
+                        <div className="flex items-center justify-between">
+                            <h3 className="font-bold text-blue-600 dark:text-blue-400 text-sm flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-blue-500"></div> Coleta</h3>
+                            {recentPickupAddresses.length > 0 && (
+                                <span className="text-[10px] text-blue-500 dark:text-blue-400">{recentPickupAddresses.length} endereço(s) salvo(s)</span>
+                            )}
+                        </div>
                         {pickupAddresses.map((addr, idx) => (
                             <div key={idx} className="relative">
-                                <AddressAutocomplete
-                                    value={addr}
-                                    onChange={(value) => handleAddressChange('pickup', idx, value)}
-                                    placeholder="Endereço de retirada"
-                                    iconColor="blue"
-                                />
+                                <div className="flex gap-2">
+                                    <div className="flex-1">
+                                        <AddressAutocomplete
+                                            value={addr}
+                                            onChange={(value) => handleAddressChange('pickup', idx, value)}
+                                            placeholder="Endereço de retirada"
+                                            iconColor="blue"
+                                        />
+                                    </div>
+
+                                    {/* BOTÃO LISTA DE ENDEREÇOS RECENTES */}
+                                    {recentPickupAddresses.length > 0 && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowPickupAddressList(showPickupAddressList === idx ? null : idx)}
+                                            className="p-2.5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg border border-blue-200 dark:border-blue-800 hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-colors flex-shrink-0"
+                                            title="Ver endereços recentes"
+                                        >
+                                            <MapPin size={18} />
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* DROPDOWN DE ENDEREÇOS RECENTES */}
+                                {showPickupAddressList === idx && (
+                                    <div className="absolute z-20 w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl mt-1 max-h-48 overflow-y-auto animate-fade-in custom-scrollbar">
+                                        <div className="sticky top-0 bg-blue-50 dark:bg-blue-900/30 px-3 py-2 border-b border-blue-100 dark:border-blue-800">
+                                            <span className="text-xs font-bold text-blue-600 dark:text-blue-400 flex items-center gap-2">
+                                                <MapPin size={12} />
+                                                ENDEREÇOS DE COLETA RECENTES
+                                            </span>
+                                        </div>
+                                        {recentPickupAddresses.map((address, addrIdx) => (
+                                            <button
+                                                key={addrIdx}
+                                                type="button"
+                                                onClick={() => {
+                                                    handleAddressChange('pickup', idx, address);
+                                                    setShowPickupAddressList(null);
+                                                }}
+                                                className="w-full text-left px-4 py-2.5 text-sm hover:bg-blue-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border-b border-slate-100 dark:border-slate-700 last:border-0 flex items-start gap-2"
+                                            >
+                                                <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 flex-shrink-0"></div>
+                                                <span className="line-clamp-2">{address}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
 
                                 {/* BOTÃO MÁGICO: COPIAR DO CADASTRO */}
                                 {selectedClient?.address && (
                                     <button
                                         type="button"
                                         onClick={() => handleAddressChange('pickup', idx, selectedClient.address || '')}
-                                        className="absolute right-10 top-1.5 px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 text-xs font-bold rounded-md flex items-center gap-1 transition-colors border border-blue-300 z-10"
+                                        className="absolute right-14 top-1.5 px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 text-xs font-bold rounded-md flex items-center gap-1 transition-colors border border-blue-300 z-10"
                                         title="Usar endereço do cadastro"
                                     >
                                         <Building size={12} />
@@ -439,22 +519,69 @@ export const NewOrder: React.FC<NewOrderProps> = ({ currentUser }) => {
 
                     {/* ENTREGA */}
                     <div className="space-y-3 p-4 bg-emerald-50 dark:bg-emerald-900/10 rounded-xl border border-emerald-100 dark:border-emerald-900/30">
-                        <h3 className="font-bold text-emerald-600 dark:text-emerald-400 text-sm flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-500"></div> Entrega</h3>
+                        <div className="flex items-center justify-between">
+                            <h3 className="font-bold text-emerald-600 dark:text-emerald-400 text-sm flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-500"></div> Entrega</h3>
+                            {recentDeliveryAddresses.length > 0 && (
+                                <span className="text-[10px] text-emerald-500 dark:text-emerald-400">{recentDeliveryAddresses.length} endereço(s) salvo(s)</span>
+                            )}
+                        </div>
                         {deliveryAddresses.map((addr, idx) => (
                             <div key={idx} className="relative">
-                                <AddressAutocomplete
-                                    value={addr}
-                                    onChange={(value) => handleAddressChange('delivery', idx, value)}
-                                    placeholder="Endereço de destino"
-                                    iconColor="emerald"
-                                />
+                                <div className="flex gap-2">
+                                    <div className="flex-1">
+                                        <AddressAutocomplete
+                                            value={addr}
+                                            onChange={(value) => handleAddressChange('delivery', idx, value)}
+                                            placeholder="Endereço de destino"
+                                            iconColor="emerald"
+                                        />
+                                    </div>
+
+                                    {/* BOTÃO LISTA DE ENDEREÇOS RECENTES */}
+                                    {recentDeliveryAddresses.length > 0 && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowDeliveryAddressList(showDeliveryAddressList === idx ? null : idx)}
+                                            className="p-2.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-lg border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-200 dark:hover:bg-emerald-800/50 transition-colors flex-shrink-0"
+                                            title="Ver endereços recentes"
+                                        >
+                                            <MapPin size={18} />
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* DROPDOWN DE ENDEREÇOS RECENTES */}
+                                {showDeliveryAddressList === idx && (
+                                    <div className="absolute z-20 w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl mt-1 max-h-48 overflow-y-auto animate-fade-in custom-scrollbar">
+                                        <div className="sticky top-0 bg-emerald-50 dark:bg-emerald-900/30 px-3 py-2 border-b border-emerald-100 dark:border-emerald-800">
+                                            <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
+                                                <MapPin size={12} />
+                                                ENDEREÇOS DE ENTREGA RECENTES
+                                            </span>
+                                        </div>
+                                        {recentDeliveryAddresses.map((address, addrIdx) => (
+                                            <button
+                                                key={addrIdx}
+                                                type="button"
+                                                onClick={() => {
+                                                    handleAddressChange('delivery', idx, address);
+                                                    setShowDeliveryAddressList(null);
+                                                }}
+                                                className="w-full text-left px-4 py-2.5 text-sm hover:bg-emerald-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border-b border-slate-100 dark:border-slate-700 last:border-0 flex items-start gap-2"
+                                            >
+                                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1.5 flex-shrink-0"></div>
+                                                <span className="line-clamp-2">{address}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
 
                                 {/* BOTÃO MÁGICO: COPIAR DO CADASTRO */}
                                 {selectedClient?.address && (
                                     <button
                                         type="button"
                                         onClick={() => handleAddressChange('delivery', idx, selectedClient.address || '')}
-                                        className="absolute right-10 top-1.5 px-2 py-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 text-xs font-bold rounded-md flex items-center gap-1 transition-colors border border-emerald-300 z-10"
+                                        className="absolute right-14 top-1.5 px-2 py-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 text-xs font-bold rounded-md flex items-center gap-1 transition-colors border border-emerald-300 z-10"
                                         title="Usar endereço do cadastro"
                                     >
                                         <Building size={12} />

@@ -64,8 +64,8 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
 
         setLoading(true);
         try {
-            // Garante que o storageService tenha o usuário atual sincronizado
-            setCurrentUser(user);
+            // Apenas busca dados (o usuário corrente é gerenciado pelo App.tsx/Auth)
+            // setCurrentUser removido para suportar Impersonation
 
             const [c, s, e] = await Promise.all([
                 getClients(),
@@ -85,8 +85,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     // Carrega dados automaticamente quando o usuário muda
     useEffect(() => {
         if (user && !hasLoadedInitialData) {
-            // Sincroniza o usuário no localStorage antes de carregar dados
-            setCurrentUser(user);
+            // Data load
             refreshData().then(() => {
                 setHasLoadedInitialData(true);
             });

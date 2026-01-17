@@ -64,8 +64,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ currentAdmin, onImperson
 
         try {
             if (action === 'DELETE') {
-                await deleteUser(user.id);
-                toast.success(`Usuário ${user.name} excluído com sucesso.`);
+                // SOFT DELETE: Inativa o usuário em vez de excluir
+                const updatedUser: User = { ...user, status: 'BLOCKED' };
+                await updateUserProfile(updatedUser);
+                toast.success(`Usuário ${user.name} inativado com sucesso.`);
             } else if (action === 'BLOCK') {
                 const updatedUser: User = { ...user, status: 'BLOCKED' };
                 await updateUserProfile(updatedUser);
@@ -157,7 +159,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ currentAdmin, onImperson
                             <p className="text-slate-600 dark:text-slate-400 mb-6">
                                 Você está prestes a realizar uma ação em <strong>{confirmModal.user.name}</strong>.
                                 <br />
-                                {confirmModal.action === 'DELETE' && 'Isso removerá permanentemente o usuário e seus dados.'}
+                                {confirmModal.action === 'DELETE' && 'O usuário ficará inativo e não poderá mais acessar o sistema.'}
                                 {confirmModal.action === 'BLOCK' && 'O usuário não conseguirá mais fazer login.'}
                             </p>
 
@@ -240,8 +242,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ currentAdmin, onImperson
                                         <tr key={u.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
                                             <td className="p-3">
                                                 {u.status === 'BLOCKED' ? (
-                                                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
-                                                        <Lock size={10} /> Bloqueado
+                                                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400">
+                                                        <Lock size={10} /> Inativo
+                                                    </span>
+                                                ) : u.status === 'PENDING' ? (
+                                                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">
+                                                        <AlertTriangle size={10} /> Aguardando
                                                     </span>
                                                 ) : (
                                                     <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
@@ -262,6 +268,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ currentAdmin, onImperson
                                             <td className="p-3 text-right">
                                                 {u.id !== currentAdmin.id && (
                                                     <div className="flex justify-end gap-2">
+
+                                                        {/* Botão APROVAR (Apenas para PENDING) */}
+                                                        {u.status === 'PENDING' && (
+                                                            <button
+                                                                onClick={() => openConfirmModal(u, 'UNBLOCK')} // Reutilizando UNBLOCK como "APROVAR" (Set to ACTIVE)
+                                                                className="p-1.5 text-white bg-emerald-500 hover:bg-emerald-600 rounded-md shadow-sm"
+                                                                title="Aprovar Cadastro"
+                                                            >
+                                                                <CheckCircle size={16} />
+                                                            </button>
+                                                        )}
+
                                                         <button
                                                             onClick={() => onImpersonate(u)}
                                                             className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md"
@@ -279,7 +297,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ currentAdmin, onImperson
                                                             >
                                                                 <Unlock size={16} />
                                                             </button>
-                                                        ) : (
+                                                        ) : u.status !== 'PENDING' && (
                                                             <button
                                                                 onClick={() => openConfirmModal(u, 'BLOCK')}
                                                                 className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-md"

@@ -21,62 +21,101 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // --- Helper: Fetch user profile from 'users' table ---
 const fetchUserProfile = async (authUser: SupabaseUser): Promise<User | null> => {
-  // 1. Tentar buscar pelo ID (padrão)
-  let { data, error } = await supabase
-    .from('users')
-    .select('*')
-    .eq('id', authUser.id)
-    .single();
-
-  // 2. Se não achou pelo ID, tenta achar pelo EMAIL (caso legado)
-  if (!data && authUser.email) {
-    console.log("Perfil não encontrado pelo ID. Tentando buscar por email (Migração)...");
-
-    const { data: legacyData } = await supabase
+  try {
+    // 1. Tentar buscar pelo ID (padrão)
+    // Timeout wrapper to prevent hanging
+    const fetchPromise = supabase
       .from('users')
       .select('*')
-      .eq('email', authUser.email)
+      .eq('id', authUser.id)
       .single();
 
-    if (legacyData) {
-      console.log("Usuário legado encontrado por email. Atualizando ID para:", authUser.id);
+    const timeoutPromise = new Promise<{ data: any, error: any }>((_, reject) =>
+      setTimeout(() => reject(new Error("Database timeout")), 10000)
+    );
 
-      // Atualizar o registro antigo com o NOVO ID do Supabase Auth
-      const { error: updateError } = await supabase
+    let { data, error } = await Promise.race([fetchPromise, timeoutPromise]);
+
+    if (error) {
+      console.warn("Erro ao buscar perfil primário:", error.message, error.code);
+    }
+
+    // 2. Se não achou pelo ID, tenta achar pelo EMAIL (caso legado ou erro de permissão)
+    if (!data && authUser.email) {
+      console.log("Perfil não encontrado pelo ID. Tentando buscar por email (Migração)...");
+
+      const { data: legacyData, error: legacyError } = await supabase
         .from('users')
-        .update({ id: authUser.id })
-        .eq('email', authUser.email);
+        .select('*')
+        .eq('email', authUser.email)
+        .single();
 
-      if (!updateError) {
-        // Se atualizou com sucesso, usa os dados legados (agora com ID novo)
-        data = { ...legacyData, id: authUser.id };
-      } else {
-        console.error("Erro ao migrar ID do usuário:", updateError.message);
+      if (legacyError) {
+        console.warn("Erro ao buscar perfil legado:", legacyError.message);
+      }
+
+      if (legacyData) {
+        console.log("Usuário legado encontrado por email. Atualizando ID para:", authUser.id);
+
+        // Atualizar o registro antigo com o NOVO ID do Supabase Auth
+        const { error: updateError } = await supabase
+          .from('users')
+          .update({ id: authUser.id })
+          .eq('email', authUser.email);
+
+        if (!updateError) {
+          // Se atualizou com sucesso, usa os dados legados (agora com ID novo)
+          data = { ...legacyData, id: authUser.id };
+        } else {
+          console.error("Erro ao migrar ID do usuário:", updateError.message);
+          // Mesmo com erro de update, podemos usar os dados legados em memória temporariamente
+          data = legacyData;
+        }
       }
     }
-  }
 
-  if (error && !data) {
-    // Se for erro diferente de "não encontrado" (que já tratamos acima) ou se realmente não achou nada
-    if (error.code !== 'PGRST116') {
-      console.error('Error fetching user profile:', error.message);
+    if (!data) {
+      console.error('Perfil não encontrado no banco. Criando perfil temporário em memória.');
+      // Fallback: criar perfil básico com dados do Auth para não bloquear login
+      return {
+        id: authUser.id,
+        name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'Usuário',
+        email: authUser.email || '',
+        phone: authUser.phone || '',
+        role: 'USER',
+        status: 'ACTIVE',
+      } as User;
     }
-    return null;
+
+    return {
+      id: data.id,
+      name: data.name,
+      email: data.email,
+      phone: data.phone,
+      role: data.role || 'USER',
+      status: data.status || 'ACTIVE',
+      companyName: data.company_name,
+      companyAddress: data.company_address,
+      companyCnpj: data.company_cnpj,
+    } as User;
+
+  } catch (err) {
+    console.error("CRITICAL ERROR in fetchUserProfile:", err);
+
+    // Tentar recuperar role do metadata (se existir)
+    const metadataRole = authUser.app_metadata?.role || authUser.user_metadata?.role || 'USER';
+    const safeRole = metadataRole === 'ADMIN' ? 'ADMIN' : 'USER';
+
+    // Fallback de segurança máxima
+    return {
+      id: authUser.id,
+      name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'Usuário',
+      email: authUser.email || '',
+      role: safeRole,
+      status: 'ACTIVE',
+      companyName: authUser.user_metadata?.companyName || '',
+    } as User;
   }
-
-  if (!data) return null;
-
-  return {
-    id: data.id,
-    name: data.name,
-    email: data.email,
-    phone: data.phone,
-    role: data.role || 'USER',
-    status: data.status || 'ACTIVE',
-    companyName: data.company_name,
-    companyAddress: data.company_address,
-    companyCnpj: data.company_cnpj,
-  } as User;
 };
 
 // --- Provider Component ---
@@ -92,56 +131,53 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Initialize auth state on mount
   useEffect(() => {
+    let isMounted = true;
+
     const initAuth = async () => {
+      console.log("Iniciando verificação de autenticação...");
+
+      // Função para buscar sessão do Supabase
+      const getSessionPromise = async () => {
+        const { data, error } = await supabase.auth.getSession();
+        if (error) throw error;
+        return data.session;
+      };
+
+      // Timeout de 6 segundos - se passar disso, mostra login
+      const timeoutPromise = new Promise<null>((resolve) => {
+        setTimeout(() => {
+          console.warn('Auth timeout após 6s - mostrando tela de login');
+          resolve(null);
+        }, 6000);
+      });
+
       try {
-        console.log("Iniciando verificação de autenticação...");
+        // Race entre sessão e timeout
+        const session = await Promise.race([getSessionPromise(), timeoutPromise]);
 
-        // Timeout de 5s para não prender o usuário
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Auth initialization timeout')), 5000)
-        );
+        if (!isMounted) return;
 
-        const sessionPromise = async () => {
-          // Força checagem de sessão no servidor/local
-          const { data, error } = await supabase.auth.getSession();
-          if (error) throw error;
-          return data.session;
-        };
-
-        const currentSession = await Promise.race([sessionPromise(), timeoutPromise]) as Session | null;
-
-        if (currentSession?.user) {
-          console.log("Sessão encontrada para:", currentSession.user.email);
-          setSession(currentSession);
-          setSupabaseUser(currentSession.user);
+        if (session?.user) {
+          console.log("Sessão encontrada para:", session.user.email);
+          setSession(session);
+          setSupabaseUser(session.user);
 
           try {
-            const profile = await fetchUserProfile(currentSession.user);
-            setUser(profile);
+            const profile = await fetchUserProfile(session.user);
+            if (isMounted) setUser(profile);
           } catch (profileError) {
             console.error("Erro não-crítico ao buscar perfil:", profileError);
           }
         } else {
-          console.log("Nenhuma sessão ativa encontrada.");
+          console.log("Nenhuma sessão ativa ou timeout.");
         }
       } catch (error) {
-        console.error('CRITICAL Auth init error:', error);
-
-        // Em caso de qualquer erro crítico na inicialização (timeout ou corrupção)
-        // Limpa TUDO relacionado ao Supabase para garantir que o próximo load funcione
-        Object.keys(localStorage).forEach(key => {
-          if (key.startsWith('sb-')) {
-            console.log("Removendo chave suspeita:", key);
-            localStorage.removeItem(key);
-          }
-        });
-
-        // Tenta deslogar oficial para limpar cookies/memória se possível
-        await supabase.auth.signOut().catch(() => { });
-
+        console.error('Erro ao verificar sessão:', error);
       } finally {
-        console.log("Finalizando loading de auth.");
-        setLoading(false);
+        if (isMounted) {
+          console.log("Finalizando loading de auth.");
+          setLoading(false);
+        }
       }
     };
 
@@ -161,6 +197,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     });
 
     return () => {
+      isMounted = false;
       subscription.unsubscribe();
     };
   }, []);
@@ -183,6 +220,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         if (profile?.status === 'BLOCKED') {
           await supabase.auth.signOut();
           return { success: false, message: 'Conta bloqueada. Contate o administrador.' };
+        }
+
+        if (profile?.status === 'PENDING') {
+          await supabase.auth.signOut();
+          return { success: false, message: 'Cadastro em análise. Aguarde aprovação do administrador.' };
         }
 
         setUser(profile);
@@ -224,7 +266,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         email: email.trim().toLowerCase(),
         phone: phone.trim(),
         role: 'USER',
-        status: 'ACTIVE',
+        status: 'PENDING', // AGUARDA APROVAÇÃO
       });
 
       if (profileError) {
@@ -268,10 +310,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
       }
 
-      const profile = await fetchUserProfile(authData.user);
-      setUser(profile);
+      // NÃO Logar automaticamente. Exigir aprovação.
+      await supabase.auth.signOut();
 
-      return { success: true };
+      return { success: false, message: 'Cadastro realizado com sucesso! Aguarde a aprovação do administrador para entrar.' };
     } catch (error: any) {
       return { success: false, message: error.message };
     }

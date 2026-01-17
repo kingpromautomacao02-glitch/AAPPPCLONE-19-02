@@ -67,6 +67,13 @@ function AppContent() {
     setDisplayUser(null);
   };
 
+  // Refresh Data when switching users (Initial load or Impersonation)
+  useEffect(() => {
+    if (displayUser) {
+      refreshData();
+    }
+  }, [displayUser, refreshData]);
+
   // Impersonation Logic
   const startImpersonation = (targetUser: User) => {
     if (displayUser?.role !== 'ADMIN') return;
