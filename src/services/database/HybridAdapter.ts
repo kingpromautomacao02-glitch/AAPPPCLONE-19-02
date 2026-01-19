@@ -6,12 +6,21 @@ import { offlineStorage, syncQueue, connectionService } from '../offline';
 /**
  * HybridAdapter - Combines Supabase with local offline storage
  * 
- * When ONLINE: Uses Supabase as primary, updates local cache
+ * When ONLINE: Uses Supabase as primary, updates local cache (intelligently)
  * When OFFLINE: Uses local cache, queues changes for sync
+ * 
+ * OTIMIZAÇÕES:
+ * - Cache é atualizado apenas uma vez por sessão (não a cada leitura)
+ * - Evita escritas excessivas no IndexedDB
  */
 export class HybridAdapter implements DatabaseAdapter {
     private supabase: SupabaseAdapter;
     private initialized = false;
+
+    // Flags para controlar sincronização de cache (apenas uma vez por sessão)
+    private hasSyncedClients = false;
+    private hasSyncedServices = false;
+    private hasSyncedExpenses = false;
 
     constructor(url?: string, key?: string) {
         this.supabase = new SupabaseAdapter(url, key);
@@ -127,9 +136,17 @@ export class HybridAdapter implements DatabaseAdapter {
 
         if (this.isOnline) {
             try {
-                // Fetch from Supabase and update cache
                 const clients = await this.supabase.getClients(ownerId);
-                await offlineStorage.saveClients(clients);
+
+                // OTIMIZAÇÃO: Só atualiza cache na primeira vez da sessão
+                if (!this.hasSyncedClients) {
+                    // Atualiza cache em background (não bloqueia)
+                    offlineStorage.saveClients(clients).then(() => {
+                        this.hasSyncedClients = true;
+                        console.log('HybridAdapter: Cache de clientes atualizado');
+                    }).catch(err => console.warn('Cache update failed:', err));
+                }
+
                 return clients;
             } catch (error) {
                 console.warn('HybridAdapter: Supabase error, falling back to cache', error);
@@ -184,10 +201,15 @@ export class HybridAdapter implements DatabaseAdapter {
         if (this.isOnline) {
             try {
                 const services = await this.supabase.getServices(ownerId, start, end);
-                // Only cache if no date filter (full sync)
-                if (!start && !end) {
-                    await offlineStorage.saveServices(services);
+
+                // OTIMIZAÇÃO: Só atualiza cache na primeira vez (sem filtros específicos)
+                if (!this.hasSyncedServices && !start && !end) {
+                    offlineStorage.saveServices(services).then(() => {
+                        this.hasSyncedServices = true;
+                        console.log('HybridAdapter: Cache de serviços atualizado');
+                    }).catch(err => console.warn('Cache update failed:', err));
                 }
+
                 return clientId ? services.filter(s => s.clientId === clientId) : services;
             } catch (error) {
                 console.warn('HybridAdapter: Supabase error, falling back to cache', error);
@@ -273,9 +295,15 @@ export class HybridAdapter implements DatabaseAdapter {
         if (this.isOnline) {
             try {
                 const expenses = await this.supabase.getExpenses(ownerId, start, end);
-                if (!start && !end) {
-                    await offlineStorage.saveExpenses(expenses);
+
+                // OTIMIZAÇÃO: Só atualiza cache na primeira vez (sem filtros)
+                if (!this.hasSyncedExpenses && !start && !end) {
+                    offlineStorage.saveExpenses(expenses).then(() => {
+                        this.hasSyncedExpenses = true;
+                        console.log('HybridAdapter: Cache de despesas atualizado');
+                    }).catch(err => console.warn('Cache update failed:', err));
                 }
+
                 return expenses;
             } catch (error) {
                 console.warn('HybridAdapter: Supabase error, falling back to cache', error);
@@ -355,6 +383,19 @@ export class HybridAdapter implements DatabaseAdapter {
         ]);
 
         await offlineStorage.syncFromServer(ownerId, clients, services, expenses);
+
+        // Reset sync flags para permitir novo cache
+        this.hasSyncedClients = true;
+        this.hasSyncedServices = true;
+        this.hasSyncedExpenses = true;
+
         console.log('HybridAdapter: Force sync completed');
+    }
+
+    // --- RESET CACHE FLAGS (para forçar atualização) ---
+    resetCacheFlags(): void {
+        this.hasSyncedClients = false;
+        this.hasSyncedServices = false;
+        this.hasSyncedExpenses = false;
     }
 }

@@ -11,7 +11,8 @@ import {
     Briefcase,
     RotateCcw,
     Phone,
-    MapPin
+    MapPin,
+    Package
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Client, ServiceRecord, User as UserType } from '../types';
@@ -25,7 +26,7 @@ interface ClientListProps {
     onRefresh: () => void;
 }
 
-export const ClientList: React.FC<ClientListProps> = ({ clients, currentUser, onRefresh }) => {
+export const ClientList: React.FC<ClientListProps> = ({ clients, services, currentUser, onRefresh }) => {
     const navigate = useNavigate();
     const [searchTerm, setSearchTerm] = useState('');
     const [showModal, setShowModal] = useState(false);
@@ -33,8 +34,19 @@ export const ClientList: React.FC<ClientListProps> = ({ clients, currentUser, on
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
     const [showTrash, setShowTrash] = useState(false);
 
+    // Conta serviços por cliente (apenas serviços não deletados)
+    const serviceCountByClient = useMemo(() => {
+        const counts: Record<string, number> = {};
+        services
+            .filter(s => !s.deletedAt)
+            .forEach(s => {
+                counts[s.clientId] = (counts[s.clientId] || 0) + 1;
+            });
+        return counts;
+    }, [services]);
+
     const filteredClients = useMemo(() => {
-        return clients.filter(c => {
+        const filtered = clients.filter(c => {
             const isDeleted = !!c.deletedAt;
             if (showTrash && !isDeleted) return false;
             if (!showTrash && isDeleted) return false;
@@ -45,7 +57,14 @@ export const ClientList: React.FC<ClientListProps> = ({ clients, currentUser, on
                 (c.cnpj && c.cnpj.includes(searchTerm))
             );
         });
-    }, [clients, searchTerm, showTrash]);
+
+        // Ordena por quantidade de serviços (mais pedidos primeiro)
+        return filtered.sort((a, b) => {
+            const countA = serviceCountByClient[a.id] || 0;
+            const countB = serviceCountByClient[b.id] || 0;
+            return countB - countA; // Ordem decrescente
+        });
+    }, [clients, searchTerm, showTrash, serviceCountByClient]);
 
     const handleSaveClient = async (clientData: Partial<Client>) => {
         // Validation
@@ -203,7 +222,14 @@ export const ClientList: React.FC<ClientListProps> = ({ clients, currentUser, on
                                         <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-blue-600 dark:text-blue-400">
                                             <Briefcase size={20} />
                                         </div>
-                                        <div className="flex gap-2">
+                                        <div className="flex gap-2 items-center">
+                                            {/* Badge de serviços */}
+                                            {(serviceCountByClient[client.id] || 0) > 0 && (
+                                                <span className="text-xs font-bold px-2 py-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-full border border-emerald-200 dark:border-emerald-700 flex items-center gap-1" title="Serviços realizados">
+                                                    <Package size={12} />
+                                                    {serviceCountByClient[client.id]}
+                                                </span>
+                                            )}
                                             <span className="text-xs font-bold px-2 py-1 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-full border border-slate-200 dark:border-slate-600">
                                                 {client.category}
                                             </span>
@@ -270,6 +296,7 @@ export const ClientList: React.FC<ClientListProps> = ({ clients, currentUser, on
                                         <th className="p-4 font-bold">Cliente</th>
                                         <th className="p-4 font-bold">Responsável</th>
                                         <th className="p-4 font-bold">Contato</th>
+                                        <th className="p-4 font-bold text-center">Serviços</th>
                                         <th className="p-4 font-bold">Categoria</th>
                                         <th className="p-4 font-bold text-right">Ações</th>
                                     </tr>
@@ -290,6 +317,16 @@ export const ClientList: React.FC<ClientListProps> = ({ clients, currentUser, on
                                             </td>
                                             <td className="p-4 text-slate-600 dark:text-slate-300">
                                                 {client.phone || '-'}
+                                            </td>
+                                            <td className="p-4 text-center">
+                                                {(serviceCountByClient[client.id] || 0) > 0 ? (
+                                                    <span className="text-xs font-bold px-2 py-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-full border border-emerald-200 dark:border-emerald-700 inline-flex items-center gap-1">
+                                                        <Package size={12} />
+                                                        {serviceCountByClient[client.id]}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-xs text-slate-400">0</span>
+                                                )}
                                             </td>
                                             <td className="p-4">
                                                 <span className="text-xs font-bold px-2 py-1 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-full border border-slate-200 dark:border-slate-600">

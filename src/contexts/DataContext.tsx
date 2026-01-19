@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect, useRef } from 'react';
 import { Client, ServiceRecord, ExpenseRecord } from '../types';
 import { useAuth } from './AuthContext';
 import {
@@ -14,7 +14,6 @@ import {
     restoreService as restoreServiceService,
     saveExpense as saveExpenseService,
     deleteExpense as deleteExpenseService,
-    setCurrentUser,
 } from '../services/storageService';
 
 // --- Types ---
@@ -23,6 +22,7 @@ interface DataContextType {
     services: ServiceRecord[];
     expenses: ExpenseRecord[];
     loading: boolean;
+    isSyncing: boolean;
     refreshData: () => Promise<void>;
     // Client operations
     saveClient: (client: Client) => Promise<void>;
@@ -51,7 +51,11 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     const [services, setServices] = useState<ServiceRecord[]>([]);
     const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
     const [loading, setLoading] = useState(false);
+    const [isSyncing, setIsSyncing] = useState(false);
     const [hasLoadedInitialData, setHasLoadedInitialData] = useState(false);
+
+    // Ref para evitar múltiplas chamadas simultâneas de refresh
+    const isRefreshing = useRef(false);
 
     // --- Refresh all data ---
     const refreshData = useCallback(async () => {
@@ -62,11 +66,16 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
             return;
         }
 
-        setLoading(true);
-        try {
-            // Apenas busca dados (o usuário corrente é gerenciado pelo App.tsx/Auth)
-            // setCurrentUser removido para suportar Impersonation
+        // Evita múltiplas chamadas simultâneas
+        if (isRefreshing.current) {
+            console.log('DataContext: Refresh já em andamento, ignorando...');
+            return;
+        }
 
+        isRefreshing.current = true;
+        setLoading(true);
+
+        try {
             const [c, s, e] = await Promise.all([
                 getClients(),
                 getServices(),
@@ -79,18 +88,17 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
             console.error('Error refreshing data:', error);
         } finally {
             setLoading(false);
+            isRefreshing.current = false;
         }
     }, [user]);
 
     // Carrega dados automaticamente quando o usuário muda
     useEffect(() => {
         if (user && !hasLoadedInitialData) {
-            // Data load
             refreshData().then(() => {
                 setHasLoadedInitialData(true);
             });
         } else if (!user) {
-            // Limpa dados quando usuário desloga
             setClients([]);
             setServices([]);
             setExpenses([]);
@@ -98,52 +106,176 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
         }
     }, [user, hasLoadedInitialData, refreshData]);
 
-    // --- Client Operations ---
+    // --- Client Operations com Optimistic Updates ---
     const saveClient = async (client: Client) => {
-        await saveClientService(client);
-        await refreshData();
+        // 1. Optimistic Update: Atualiza estado local imediatamente
+        setClients(prev => {
+            const index = prev.findIndex(c => c.id === client.id);
+            if (index >= 0) {
+                const updated = [...prev];
+                updated[index] = client;
+                return updated;
+            }
+            return [...prev, client];
+        });
+
+        // 2. Salva no banco em background (sem aguardar)
+        setIsSyncing(true);
+        try {
+            await saveClientService(client);
+        } catch (error) {
+            console.error('Erro ao salvar cliente:', error);
+            // Em caso de erro, faz refresh para sincronizar estado
+            await refreshData();
+        } finally {
+            setIsSyncing(false);
+        }
     };
 
     const deleteClient = async (id: string) => {
-        await deleteClientService(id);
-        await refreshData();
+        // Optimistic: marca como deletado localmente
+        setClients(prev => prev.map(c =>
+            c.id === id ? { ...c, deletedAt: new Date().toISOString() } : c
+        ));
+
+        setIsSyncing(true);
+        try {
+            await deleteClientService(id);
+        } catch (error) {
+            console.error('Erro ao deletar cliente:', error);
+            await refreshData();
+        } finally {
+            setIsSyncing(false);
+        }
     };
 
     const restoreClient = async (id: string) => {
-        await restoreClientService(id);
-        await refreshData();
+        // Optimistic: remove deletedAt localmente
+        setClients(prev => prev.map(c =>
+            c.id === id ? { ...c, deletedAt: undefined } : c
+        ));
+
+        setIsSyncing(true);
+        try {
+            await restoreClientService(id);
+        } catch (error) {
+            console.error('Erro ao restaurar cliente:', error);
+            await refreshData();
+        } finally {
+            setIsSyncing(false);
+        }
     };
 
-    // --- Service Operations ---
+    // --- Service Operations com Optimistic Updates ---
     const saveService = async (service: ServiceRecord) => {
-        await saveServiceService(service);
-        await refreshData();
+        // Optimistic Update
+        setServices(prev => {
+            const index = prev.findIndex(s => s.id === service.id);
+            if (index >= 0) {
+                const updated = [...prev];
+                updated[index] = service;
+                return updated;
+            }
+            return [...prev, service];
+        });
+
+        setIsSyncing(true);
+        try {
+            await saveServiceService(service);
+        } catch (error) {
+            console.error('Erro ao salvar serviço:', error);
+            await refreshData();
+        } finally {
+            setIsSyncing(false);
+        }
     };
 
     const updateService = async (service: ServiceRecord) => {
-        await updateServiceService(service);
-        await refreshData();
+        // Optimistic Update
+        setServices(prev => prev.map(s => s.id === service.id ? service : s));
+
+        setIsSyncing(true);
+        try {
+            await updateServiceService(service);
+        } catch (error) {
+            console.error('Erro ao atualizar serviço:', error);
+            await refreshData();
+        } finally {
+            setIsSyncing(false);
+        }
     };
 
     const deleteService = async (id: string) => {
-        await deleteServiceService(id);
-        await refreshData();
+        // Optimistic: marca como deletado
+        setServices(prev => prev.map(s =>
+            s.id === id ? { ...s, deletedAt: new Date().toISOString() } : s
+        ));
+
+        setIsSyncing(true);
+        try {
+            await deleteServiceService(id);
+        } catch (error) {
+            console.error('Erro ao deletar serviço:', error);
+            await refreshData();
+        } finally {
+            setIsSyncing(false);
+        }
     };
 
     const restoreService = async (id: string) => {
-        await restoreServiceService(id);
-        await refreshData();
+        // Optimistic: remove deletedAt
+        setServices(prev => prev.map(s =>
+            s.id === id ? { ...s, deletedAt: undefined } : s
+        ));
+
+        setIsSyncing(true);
+        try {
+            await restoreServiceService(id);
+        } catch (error) {
+            console.error('Erro ao restaurar serviço:', error);
+            await refreshData();
+        } finally {
+            setIsSyncing(false);
+        }
     };
 
-    // --- Expense Operations ---
+    // --- Expense Operations com Optimistic Updates ---
     const saveExpense = async (expense: ExpenseRecord) => {
-        await saveExpenseService(expense);
-        await refreshData();
+        // Optimistic Update
+        setExpenses(prev => {
+            const index = prev.findIndex(e => e.id === expense.id);
+            if (index >= 0) {
+                const updated = [...prev];
+                updated[index] = expense;
+                return updated;
+            }
+            return [...prev, expense];
+        });
+
+        setIsSyncing(true);
+        try {
+            await saveExpenseService(expense);
+        } catch (error) {
+            console.error('Erro ao salvar despesa:', error);
+            await refreshData();
+        } finally {
+            setIsSyncing(false);
+        }
     };
 
     const deleteExpense = async (id: string) => {
-        await deleteExpenseService(id);
-        await refreshData();
+        // Optimistic: remove da lista
+        setExpenses(prev => prev.filter(e => e.id !== id));
+
+        setIsSyncing(true);
+        try {
+            await deleteExpenseService(id);
+        } catch (error) {
+            console.error('Erro ao deletar despesa:', error);
+            await refreshData();
+        } finally {
+            setIsSyncing(false);
+        }
     };
 
     const value: DataContextType = {
@@ -151,6 +283,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
         services,
         expenses,
         loading,
+        isSyncing,
         refreshData,
         saveClient,
         deleteClient,

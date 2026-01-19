@@ -3,6 +3,23 @@ import { DatabaseAdapter } from './types';
 import { Client, ServiceRecord, ExpenseRecord, User, ServiceLog } from '../../types';
 import { supabase } from '../supabaseClient';
 
+// --- Performance Configuration ---
+const DEFAULT_DAYS_RANGE = 90; // Busca padrão: últimos 90 dias
+const MAX_CLIENTS_LIMIT = 500; // Limite máximo de clientes
+const MAX_SERVICES_LIMIT = 1000; // Limite máximo de serviços por consulta
+const MAX_EXPENSES_LIMIT = 500; // Limite máximo de despesas
+
+// Helper: calcula data de início padrão (90 dias atrás)
+const getDefaultStartDate = (): string => {
+    const date = new Date();
+    date.setDate(date.getDate() - DEFAULT_DAYS_RANGE);
+    return date.toISOString().split('T')[0];
+};
+
+const getTodayDate = (): string => {
+    return new Date().toISOString().split('T')[0];
+};
+
 export class SupabaseAdapter implements DatabaseAdapter {
     private supabase: SupabaseClient;
 
@@ -109,6 +126,9 @@ export class SupabaseAdapter implements DatabaseAdapter {
         let query = this.supabase.from('clients').select('*');
         if (ownerId) query = query.eq('owner_id', ownerId);
 
+        // Adiciona limite para evitar sobrecarga
+        query = query.limit(MAX_CLIENTS_LIMIT).order('created_at', { ascending: false });
+
         const { data, error } = await query;
         if (error) {
             console.error("Erro clients:", error.message);
@@ -163,7 +183,19 @@ export class SupabaseAdapter implements DatabaseAdapter {
         let query = this.supabase.from('services').select('*');
 
         if (ownerId) query = query.eq('owner_id', ownerId);
-        if (start && end) query = query.gte('date', start).lte('date', end);
+
+        // OTIMIZAÇÃO: Se não houver filtro de data, usa range padrão de 90 dias
+        if (start && end) {
+            query = query.gte('date', start).lte('date', end);
+        } else {
+            // Busca apenas os últimos 90 dias por padrão
+            const defaultStart = getDefaultStartDate();
+            const today = getTodayDate();
+            query = query.gte('date', defaultStart).lte('date', today);
+        }
+
+        // Adiciona limite e ordenação
+        query = query.limit(MAX_SERVICES_LIMIT).order('date', { ascending: false });
 
         const { data, error } = await query;
         if (error) {
@@ -245,7 +277,18 @@ export class SupabaseAdapter implements DatabaseAdapter {
     async getExpenses(ownerId?: string, start?: string, end?: string): Promise<ExpenseRecord[]> {
         let query = this.supabase.from('expenses').select('*');
         if (ownerId) query = query.eq('owner_id', ownerId);
-        if (start && end) query = query.gte('date', start).lte('date', end);
+
+        // OTIMIZAÇÃO: Se não houver filtro de data, usa range padrão de 90 dias
+        if (start && end) {
+            query = query.gte('date', start).lte('date', end);
+        } else {
+            const defaultStart = getDefaultStartDate();
+            const today = getTodayDate();
+            query = query.gte('date', defaultStart).lte('date', today);
+        }
+
+        // Adiciona limite e ordenação
+        query = query.limit(MAX_EXPENSES_LIMIT).order('date', { ascending: false });
 
         const { data, error } = await query;
         if (error) return [];
