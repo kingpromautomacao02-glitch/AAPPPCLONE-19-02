@@ -591,6 +591,33 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialCli
         setServices(updatedList);
     };
 
+    // Função para alteração em massa do status de pagamento
+    const handleBulkStatusChange = async (markAsPaid: boolean) => {
+        if (selectedIds.size === 0) {
+            toast.error('Nenhum serviço selecionado.');
+            return;
+        }
+
+        try {
+            const selectedServices = services.filter(s => selectedIds.has(s.id));
+            const updates = selectedServices.map(s => ({
+                ...s,
+                paid: markAsPaid
+            }));
+
+            await bulkUpdateServices(updates);
+
+            const updatedList = await getServicesByClient(client.id);
+            setServices(updatedList);
+            setSelectedIds(new Set()); // Limpa a seleção
+
+            toast.success(`${selectedServices.length} serviço(s) marcado(s) como ${markAsPaid ? 'PAGO' : 'PENDENTE'}.`);
+        } catch (error) {
+            console.error('Erro ao atualizar serviços em massa:', error);
+            toast.error('Erro ao atualizar os serviços.');
+        }
+    };
+
     const resetForm = () => {
         setPickupAddresses(['']);
         setDeliveryAddresses(['']);
