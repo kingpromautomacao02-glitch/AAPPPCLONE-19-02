@@ -68,9 +68,12 @@ function AppContent() {
   };
 
   // Refresh Data when switching users (Initial load or Impersonation)
+  const previousUserIdRef = React.useRef<string | null>(null);
+
   useEffect(() => {
-    if (displayUser) {
+    if (displayUser && displayUser.id !== previousUserIdRef.current) {
       refreshData();
+      previousUserIdRef.current = displayUser.id;
     }
   }, [displayUser, refreshData]);
 

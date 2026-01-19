@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { User as SupabaseUser, Session } from '@supabase/supabase-js';
 import { User } from '../types';
 import { supabase } from '../services/supabaseClient';
@@ -20,63 +20,19 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // --- Helper: Fetch user profile from 'users' table ---
+// --- Helper: Fetch user profile from 'users' table ---
 const fetchUserProfile = async (authUser: SupabaseUser): Promise<User | null> => {
   try {
-    // 1. Tentar buscar pelo ID (padrão)
-    // Timeout wrapper to prevent hanging
-    const fetchPromise = supabase
+    const { data, error } = await supabase
       .from('users')
       .select('*')
       .eq('id', authUser.id)
       .single();
 
-    const timeoutPromise = new Promise<{ data: any, error: any }>((_, reject) =>
-      setTimeout(() => reject(new Error("Database timeout")), 10000)
-    );
-
-    let { data, error } = await Promise.race([fetchPromise, timeoutPromise]);
-
     if (error) {
-      console.warn("Erro ao buscar perfil primário:", error.message, error.code);
-    }
+      console.warn("Erro ao buscar perfil:", error.message);
 
-    // 2. Se não achou pelo ID, tenta achar pelo EMAIL (caso legado ou erro de permissão)
-    if (!data && authUser.email) {
-      console.log("Perfil não encontrado pelo ID. Tentando buscar por email (Migração)...");
-
-      const { data: legacyData, error: legacyError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('email', authUser.email)
-        .single();
-
-      if (legacyError) {
-        console.warn("Erro ao buscar perfil legado:", legacyError.message);
-      }
-
-      if (legacyData) {
-        console.log("Usuário legado encontrado por email. Atualizando ID para:", authUser.id);
-
-        // Atualizar o registro antigo com o NOVO ID do Supabase Auth
-        const { error: updateError } = await supabase
-          .from('users')
-          .update({ id: authUser.id })
-          .eq('email', authUser.email);
-
-        if (!updateError) {
-          // Se atualizou com sucesso, usa os dados legados (agora com ID novo)
-          data = { ...legacyData, id: authUser.id };
-        } else {
-          console.error("Erro ao migrar ID do usuário:", updateError.message);
-          // Mesmo com erro de update, podemos usar os dados legados em memória temporariamente
-          data = legacyData;
-        }
-      }
-    }
-
-    if (!data) {
-      console.error('Perfil não encontrado no banco. Criando perfil temporário em memória.');
-      // Fallback: criar perfil básico com dados do Auth para não bloquear login
+      // Fallback básico se não encontrar no banco (mas autenticado no Supabase)
       return {
         id: authUser.id,
         name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'Usuário',
@@ -100,21 +56,8 @@ const fetchUserProfile = async (authUser: SupabaseUser): Promise<User | null> =>
     } as User;
 
   } catch (err) {
-    console.error("CRITICAL ERROR in fetchUserProfile:", err);
-
-    // Tentar recuperar role do metadata (se existir)
-    const metadataRole = authUser.app_metadata?.role || authUser.user_metadata?.role || 'USER';
-    const safeRole = metadataRole === 'ADMIN' ? 'ADMIN' : 'USER';
-
-    // Fallback de segurança máxima
-    return {
-      id: authUser.id,
-      name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'Usuário',
-      email: authUser.email || '',
-      role: safeRole,
-      status: 'ACTIVE',
-      companyName: authUser.user_metadata?.companyName || '',
-    } as User;
+    console.error("Erro inesperado em fetchUserProfile:", err);
+    return null;
   }
 };
 
@@ -123,61 +66,49 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
-export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<User | null>(null);
   const [supabaseUser, setSupabaseUser] = useState<SupabaseUser | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Initialize auth state on mount
+  // Ref to track current user ID to avoid useEffect dependencies
+  const userIdRef = useRef<string | null>(null);
+
+  // Keep ref in sync
+  useEffect(() => {
+    userIdRef.current = user?.id || null;
+  }, [user]);
+
+  // Initialize auth state on mount (RUNS ONLY ONCE)
   useEffect(() => {
     let isMounted = true;
 
     const initAuth = async () => {
-      console.log("Iniciando verificação de autenticação...");
-
-      // Função para buscar sessão do Supabase
-      const getSessionPromise = async () => {
-        const { data, error } = await supabase.auth.getSession();
-        if (error) throw error;
-        return data.session;
-      };
-
-      // Timeout de 6 segundos - se passar disso, mostra login
-      const timeoutPromise = new Promise<null>((resolve) => {
-        setTimeout(() => {
-          console.warn('Auth timeout após 6s - mostrando tela de login');
-          resolve(null);
-        }, 6000);
-      });
-
+      console.log("Iniciando initAuth...");
       try {
-        // Race entre sessão e timeout
-        const session = await Promise.race([getSessionPromise(), timeoutPromise]);
+        const { data: { session }, error } = await supabase.auth.getSession();
 
-        if (!isMounted) return;
+        if (error) {
+          console.error("Erro ao pegar sessão:", error);
+        }
 
         if (session?.user) {
-          console.log("Sessão encontrada para:", session.user.email);
+          console.log("Sessão inicial encontrada:", session.user.email);
           setSession(session);
           setSupabaseUser(session.user);
 
-          try {
+          if (isMounted) {
             const profile = await fetchUserProfile(session.user);
-            if (isMounted) setUser(profile);
-          } catch (profileError) {
-            console.error("Erro não-crítico ao buscar perfil:", profileError);
+            setUser(profile);
           }
         } else {
-          console.log("Nenhuma sessão ativa ou timeout.");
+          console.log("Nenhuma sessão inicial.");
         }
-      } catch (error) {
-        console.error('Erro ao verificar sessão:', error);
+      } catch (err) {
+        console.error("Erro fatal em initAuth:", err);
       } finally {
-        if (isMounted) {
-          console.log("Finalizando loading de auth.");
-          setLoading(false);
-        }
+        if (isMounted) setLoading(false);
       }
     };
 
@@ -185,12 +116,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+      // Ignore token refresh events if we already have a session
+      if (event === 'TOKEN_REFRESHED' && session?.user?.id === newSession?.user?.id) {
+        return;
+      }
+
       setSession(newSession);
       setSupabaseUser(newSession?.user ?? null);
 
       if (newSession?.user) {
-        const profile = await fetchUserProfile(newSession.user);
-        setUser(profile);
+        // Use Ref to check if ID changed, avoiding dependency loop
+        const currentId = userIdRef.current;
+        if (!currentId || currentId !== newSession.user.id) {
+          const profile = await fetchUserProfile(newSession.user);
+          setUser(profile);
+          // Ref will be updated by the other useEffect
+        }
       } else {
         setUser(null);
       }

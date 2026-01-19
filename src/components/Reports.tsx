@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Client, ServiceRecord, PaymentMethod, User } from '../types';
 import { FileSpreadsheet, Building2, FolderOpen, ChevronRight, FileText, CreditCard, Banknote, QrCode, Table, ShieldCheck, FileDown, Loader2 } from 'lucide-react';
-import { ServiceDocumentModal } from './ClientDetails';
+import { ServiceDocumentModal } from './modals/ServiceDocumentModal';
 import { getServices, getClients } from '../services/storageService';
 // @ts-ignore
 import { jsPDF } from 'jspdf';
