@@ -1,80 +1,107 @@
-# Relatório de Melhorias e Guia de Uso - Motoboy Log
+# Relatório de Melhorias - LogiTrack CRM
 
-Este documento resume todas as atualizações, refatorações e novas funcionalidades implementadas no sistema Motoboy Log, além de fornecer um guia passo a passo para configuração.
-
-## 🚀 1. Principais Melhorias Implementadas
-
-### A. Arquitetura e Estrutura de Código
-*   **Separação de Componentes:** O arquivo gigante `App.tsx` foi refatorado. Componentes como `ClientList`, `Sidebar` e `Header` foram extraídos para arquivos próprios, melhorando a organização e facilidade de manutenção.
-*   **Roteamento Profissional:** Implementação do **React Router Dom**. O sistema agora usa rotas reais (ex: `/clients`, `/orders/new`, `/admin`), permitindo navegação direta e uso do botão "Voltar" do navegador.
-*   **Padrão de Design (Adapter Pattern):** A camada de dados foi reescrita para usar "Adaptadores". Isso permite que o sistema troque entre salvar dados no **LocalStorage** (navegador), **Supabase** ou **Firebase** apenas mudando uma configuração, sem mexer no código das telas.
-
-### B. Funcionalidades de Banco de Dados
-*   **Integração Híbrida:**
-    *   **Local (Padrão):** Funciona offline direto no navegador.
-    *   **Nuvem (Supabase/Firebase):** Preparado para conectar com bancos reais para acesso multi-dispositivo.
-*   **Operações Assíncronas:** Todo o sistema foi atualizado para usar `async/await`. Isso garante que o aplicativo não trave enquanto salva ou busca dados na internet.
-
-### C. Interface e Usabilidade (UX/UI)
-*   **Notificações Modernas:** Substituição dos `alert()` nativos por **Sonner** (Toasts). As mensagens de sucesso e erro agora são bonitas e não intrusivas.
-*   **Animações:** Adição de animações suaves de entrada (fade-in, slide-up) para uma sensação mais premium.
-*   **Feedback Visual:** Botões mostram estado de carregamento ou desabilitação durante operações.
-
-### D. Qualidade de Código e Correções
-*   **TypeScript:** Correção de centenas de erros de tipagem.
-*   **Performance:** Eliminação de renderizações desnecessárias ao mover a lógica de lista de clientes para fora do componente App principal.
-*   **Build:** O projeto agora compila (`npm run build`) sem erros, pronto para produção.
+Este documento resume todas as atualizações, refatorações e novas funcionalidades implementadas no sistema LogiTrack CRM.
 
 ---
 
-## 🛠️ 2. Passo a Passo: Configuração e Uso
+## 🚀 Melhorias Implementadas (Sessão Atual - Janeiro/2026)
 
-### Passo 1: Instalação
-Seu projeto já está atualizado. Certifique-se de ter as dependências instaladas:
-```bash
-npm install
-```
+### 1. Correção de Estabilidade (AuthContext)
+- **Problema**: Tela ficava "piscando" infinitamente devido a loops em `useEffect`
+- **Solução**: Refatoração do `AuthContext.tsx` com uso de `useRef` para evitar dependências cíclicas
+- **Resultado**: App estável, sem re-renders desnecessários
 
-### Passo 2: Escolhendo o Banco de Dados
-O sistema vem configurado por padrão para usar o **LocalStorage** (salva no próprio navegador do usuário).
+### 2. Modularização de Componentes
+Componentes grandes foram divididos em arquivos menores para facilitar manutenção:
 
-Para mudar para um banco na nuvem (para que você possa acessar os mesmos dados do celular e do PC):
+| Componente Extraído | Origem | Novo Arquivo |
+|---------------------|--------|--------------|
+| ServiceHistoryModal | ClientDetails.tsx | `src/components/modals/ServiceHistoryModal.tsx` |
+| ServiceDocumentModal | ClientDetails.tsx | `src/components/modals/ServiceDocumentModal.tsx` |
 
-1.  Renomeie o arquivo `.env.example` para `.env` (se não existir, crie um).
-2.  Edite o arquivo `.env` e mude a variável `VITE_DB_PROVIDER`:
+### 3. Paginação (Carregamento Sob Demanda)
+- **Antes**: Todas as corridas carregavam de uma vez (lento com muitos dados)
+- **Depois**: Carrega apenas **20 serviços** por vez
+- **Botão "Carregar mais"** aparece quando há mais itens
+- **Contador** mostra "Mostrando X de Y serviços"
+- **Performance**: Melhoria significativa em clientes com +100 corridas
 
-**Para usar LocalStorage (Padrão):**
-```properties
-VITE_DB_PROVIDER=LOCAL
-```
+### 4. Modal de Nova Corrida Centralizado
+- **Antes**: Formulário aparecia inline, empurrando conteúdo
+- **Depois**: Modal flutuante centralizado na tela
+- **Recursos**:
+  - Fundo escurecido com blur (`backdrop-blur-sm`)
+  - Posição fixa centralizada (`fixed inset-0 flex items-center justify-center`)
+  - Scroll interno (máximo 90% da altura da tela)
+  - Animação suave de entrada
 
-**Para usar Supabase:**
-```properties
+### 5. Correções de Tipo (TypeScript)
+- Corrigido uso de `orderId` → `manualOrderId` em `ServiceDocumentModal`
+- Removida referência a `driverId` inexistente no tipo `ServiceRecord`
+- Corrigido import path de `ServiceDocumentModal` em `Reports.tsx`
+
+---
+
+## 📋 Melhorias Anteriores
+
+### A. Arquitetura e Estrutura de Código
+- **Separação de Componentes**: Refatoração do `App.tsx` monolítico
+- **Roteamento**: React Router Dom com rotas reais (`/clients`, `/admin`, etc.)
+- **Adapter Pattern**: Troca fácil entre LocalStorage, Supabase ou Firebase
+
+### B. Banco de Dados
+- **LocalStorage**: Funciona offline
+- **Supabase**: Integração cloud multi-dispositivo
+- **Operações Assíncronas**: Uso de `async/await` em todas as chamadas
+
+### C. Interface e Usabilidade
+- **Toasts (Sonner)**: Notificações modernas
+- **Animações**: Transições suaves (fade-in, slide-up)
+- **Feedback Visual**: Estados de loading em botões
+- **Modo Escuro/Claro**: Tema alternável
+
+### D. Qualidade de Código
+- **TypeScript**: Correção de tipagens
+- **Performance**: Eliminação de re-renders desnecessários
+- **Build**: Compila sem erros para produção
+
+---
+
+## � Configuração
+
+### Variáveis de Ambiente (.env)
+```env
 VITE_DB_PROVIDER=SUPABASE
-VITE_SUPABASE_URL=sua_url_do_supabase
-VITE_SUPABASE_ANON_KEY=sua_chave_anonima
+VITE_SUPABASE_URL=https://sua-url.supabase.co
+VITE_SUPABASE_ANON_KEY=sua-chave
+VITE_MAPBOX_TOKEN=token-para-calculo-distancia
 ```
 
-**Para usar Firebase:**
-```properties
-VITE_DB_PROVIDER=FIREBASE
-VITE_FIREBASE_API_KEY=sua_api_key
-# ... outros dados do firebase
-```
-
-> **Nota:** Para instruções detalhadas de como criar a conta no Supabase ou Firebase e pegar essas chaves, consulte o arquivo **`COMO_CONFIGURAR-BANCO.md`** que criamos na raiz do projeto.
-
-### Passo 3: Rodando o Projeto
-Para iniciar o sistema em modo de desenvolvimento:
+### Comandos
 ```bash
-npm run dev
+npm install       # Instalar dependências
+npm run dev       # Rodar em desenvolvimento
+npm run build     # Build para produção
 ```
 
-### Passo 4: Migração de Dados (Dica)
-Atualmente, se você trocar de `LOCAL` para `SUPABASE`, o sistema começará vazio (conectado ao novo banco). O Painel Administrativo (`/admin`) possui uma função de "Backup e Sincronização" que foi preparada para ajudar a enviar dados locais para a nuvem (Webhook), mas a forma recomendada é começar com o banco limpo na nuvem para garantir a integridade.
+---
 
-## 📂 Resumo dos Arquivos Importantes
-*   `services/storageService.ts`: O cérebro que decide onde salvar os dados.
-*   `services/database/`: Onde ficam os adaptadores (as "peças" que conectam ao Supabase, Firebase ou Local).
-*   `components/`: Agora contém todos os pedaços da interface separados.
-*   `COMO_CONFIGURAR-BANCO.md`: Seu manual para obter as chaves de API.
+## 📂 Arquivos Importantes
+
+| Arquivo | Descrição |
+|---------|-----------|
+| `GUIA_FUNCIONALIDADES.md` | Passo a passo de todas as funções |
+| `services/storageService.ts` | Lógica de persistência de dados |
+| `contexts/AuthContext.tsx` | Gerenciamento de autenticação |
+| `contexts/DataContext.tsx` | Gerenciamento de dados globais |
+| `components/ClientDetails.tsx` | Tela de detalhes do cliente |
+
+---
+
+## 🗓️ Histórico de Versões
+
+| Data | Versão | Descrição |
+|------|--------|-----------|
+| 19/01/2026 | 2.1.0 | Modal centralizado, paginação, modularização |
+| 18/01/2026 | 2.0.0 | Integração Supabase, correções de performance |
+| Anterior | 1.x | Estrutura inicial com LocalStorage |

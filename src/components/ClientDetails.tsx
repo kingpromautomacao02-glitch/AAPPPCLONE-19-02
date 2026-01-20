@@ -156,6 +156,10 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialCli
     // Selection State
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+
+    // Pagination State
+    const ITEMS_PER_PAGE = 20;
+    const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Estados para cálculo de distância
@@ -464,9 +468,12 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialCli
     };
 
     const filteredServices = getFilteredServices();
+    const paginatedServices = filteredServices.slice(0, visibleCount);
+    const hasMoreServices = visibleCount < filteredServices.length;
 
     useEffect(() => {
         setSelectedIds(new Set());
+        setVisibleCount(ITEMS_PER_PAGE); // Reset pagination when filters change
     }, [startDate, endDate, statusFilter, services]);
 
     const toggleSelectAll = () => {
@@ -922,337 +929,339 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialCli
                     </div>
 
                     {showForm && (
-                        <form onSubmit={handleSaveService} className="bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-700 space-y-6 animate-slide-down">
-                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-700 pb-4 gap-4">
-                                <h3 className="font-bold text-white text-lg">{editingServiceId ? 'Editar Corrida' : 'Registrar Nova Corrida'}</h3>
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4 animate-fade-in">
+                            <form onSubmit={handleSaveService} className="bg-slate-900 p-6 rounded-xl shadow-2xl border border-slate-700 space-y-6 animate-slide-up w-full max-w-4xl max-h-[90vh] overflow-y-auto custom-scrollbar">
+                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-700 pb-4 gap-4">
+                                    <h3 className="font-bold text-white text-lg">{editingServiceId ? 'Editar Corrida' : 'Registrar Nova Corrida'}</h3>
 
-                                <div className="flex gap-4 w-full sm:w-auto">
-                                    <div className="w-1/2 sm:w-32">
-                                        <label className="text-xs text-slate-400 block mb-1 font-bold">Nº Pedido (Op.)</label>
-                                        <div className="relative">
-                                            <Hash size={14} className="absolute left-2 top-2 text-slate-500" />
-                                            <input
-                                                type="text"
-                                                className="w-full pl-7 p-1 bg-slate-800 text-white border border-slate-600 rounded text-sm focus:border-blue-500 outline-none uppercase"
-                                                value={manualOrderId}
-                                                onChange={e => setManualOrderId(e.target.value)}
-                                                placeholder="1234..."
-                                            />
+                                    <div className="flex gap-4 w-full sm:w-auto">
+                                        <div className="w-1/2 sm:w-32">
+                                            <label className="text-xs text-slate-400 block mb-1 font-bold">Nº Pedido (Op.)</label>
+                                            <div className="relative">
+                                                <Hash size={14} className="absolute left-2 top-2 text-slate-500" />
+                                                <input
+                                                    type="text"
+                                                    className="w-full pl-7 p-1 bg-slate-800 text-white border border-slate-600 rounded text-sm focus:border-blue-500 outline-none uppercase"
+                                                    value={manualOrderId}
+                                                    onChange={e => setManualOrderId(e.target.value)}
+                                                    placeholder="1234..."
+                                                />
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div className="w-1/2 sm:w-auto text-right">
-                                        <label className="text-xs text-slate-400 block mb-1 font-bold">Data</label>
-                                        <div className="relative">
-                                            <input type="date" className="p-1 bg-slate-800 text-white border border-slate-600 rounded text-sm" value={serviceDate} onChange={e => setServiceDate(e.target.value)} />
+                                        <div className="w-1/2 sm:w-auto text-right">
+                                            <label className="text-xs text-slate-400 block mb-1 font-bold">Data</label>
+                                            <div className="relative">
+                                                <input type="date" className="p-1 bg-slate-800 text-white border border-slate-600 rounded text-sm" value={serviceDate} onChange={e => setServiceDate(e.target.value)} />
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
 
-                            {/* Endereços - Padronizado */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="space-y-3 p-4 bg-blue-900/10 rounded-xl border border-blue-900/30">
-                                    <div className="flex items-center justify-between">
-                                        <h3 className="font-bold text-blue-400 text-sm flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-blue-500"></div> Coleta</h3>
-                                        {recentPickupAddresses.length > 0 && (
-                                            <span className="text-[10px] text-blue-400">{recentPickupAddresses.length} endereço(s) salvo(s)</span>
-                                        )}
-                                    </div>
-                                    {pickupAddresses.map((addr, idx) => (
-                                        <div key={idx} className="relative">
-                                            <div className="flex gap-2">
-                                                <div className="flex-1">
-                                                    <AddressAutocomplete
-                                                        value={addr}
-                                                        onChange={(value) => handleAddressChange('pickup', idx, value)}
-                                                        placeholder="Endereço de retirada"
-                                                        iconColor="blue"
-                                                    />
+                                {/* Endereços - Padronizado */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="space-y-3 p-4 bg-blue-900/10 rounded-xl border border-blue-900/30">
+                                        <div className="flex items-center justify-between">
+                                            <h3 className="font-bold text-blue-400 text-sm flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-blue-500"></div> Coleta</h3>
+                                            {recentPickupAddresses.length > 0 && (
+                                                <span className="text-[10px] text-blue-400">{recentPickupAddresses.length} endereço(s) salvo(s)</span>
+                                            )}
+                                        </div>
+                                        {pickupAddresses.map((addr, idx) => (
+                                            <div key={idx} className="relative">
+                                                <div className="flex gap-2">
+                                                    <div className="flex-1">
+                                                        <AddressAutocomplete
+                                                            value={addr}
+                                                            onChange={(value) => handleAddressChange('pickup', idx, value)}
+                                                            placeholder="Endereço de retirada"
+                                                            iconColor="blue"
+                                                        />
+                                                    </div>
+
+                                                    {/* BOTÃO LISTA DE ENDEREÇOS RECENTES */}
+                                                    {recentPickupAddresses.length > 0 && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setShowPickupAddressList(showPickupAddressList === idx ? null : idx)}
+                                                            className="p-2.5 bg-blue-900/30 text-blue-400 rounded-lg border border-blue-800 hover:bg-blue-800/50 transition-colors flex-shrink-0"
+                                                            title="Ver endereços recentes"
+                                                        >
+                                                            <MapPin size={18} />
+                                                        </button>
+                                                    )}
                                                 </div>
 
-                                                {/* BOTÃO LISTA DE ENDEREÇOS RECENTES */}
-                                                {recentPickupAddresses.length > 0 && (
+                                                {/* DROPDOWN DE ENDEREÇOS RECENTES */}
+                                                {showPickupAddressList === idx && (
+                                                    <div className="absolute z-20 w-full bg-slate-800 border border-slate-600 rounded-lg shadow-xl mt-1 max-h-48 overflow-y-auto animate-fade-in custom-scrollbar">
+                                                        <div className="sticky top-0 bg-blue-900/30 px-3 py-2 border-b border-blue-800">
+                                                            <span className="text-xs font-bold text-blue-400 flex items-center gap-2">
+                                                                <MapPin size={12} />
+                                                                ENDEREÇOS DE COLETA RECENTES
+                                                            </span>
+                                                        </div>
+                                                        {recentPickupAddresses.map((address, addrIdx) => (
+                                                            <button
+                                                                key={addrIdx}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    handleAddressChange('pickup', idx, address);
+                                                                    setShowPickupAddressList(null);
+                                                                }}
+                                                                className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-700 text-slate-200 border-b border-slate-700 last:border-0 flex items-start gap-2"
+                                                            >
+                                                                <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 flex-shrink-0"></div>
+                                                                <span className="line-clamp-2">{address}</span>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+
+                                                {/* BOTÃO COLAR ENDEREÇO CLIENTE */}
+                                                {client.address && (
                                                     <button
                                                         type="button"
-                                                        onClick={() => setShowPickupAddressList(showPickupAddressList === idx ? null : idx)}
-                                                        className="p-2.5 bg-blue-900/30 text-blue-400 rounded-lg border border-blue-800 hover:bg-blue-800/50 transition-colors flex-shrink-0"
-                                                        title="Ver endereços recentes"
+                                                        onClick={() => handleAddressChange('pickup', idx, client.address || '')}
+                                                        className="absolute right-14 top-1.5 px-2 py-1 bg-blue-900/50 hover:bg-blue-800/50 text-blue-400 text-xs rounded-md flex items-center gap-1 transition-colors border border-blue-700 z-10"
+                                                        title="Copiar endereço do cadastro"
                                                     >
-                                                        <MapPin size={18} />
+                                                        <Building size={12} />
+                                                        Cliente
                                                     </button>
                                                 )}
+
+                                                {pickupAddresses.length > 1 && <button type="button" onClick={() => handleRemoveAddress('pickup', idx)} className="absolute right-2 top-2.5 z-10"><X size={16} className="text-red-400" /></button>}
                                             </div>
-
-                                            {/* DROPDOWN DE ENDEREÇOS RECENTES */}
-                                            {showPickupAddressList === idx && (
-                                                <div className="absolute z-20 w-full bg-slate-800 border border-slate-600 rounded-lg shadow-xl mt-1 max-h-48 overflow-y-auto animate-fade-in custom-scrollbar">
-                                                    <div className="sticky top-0 bg-blue-900/30 px-3 py-2 border-b border-blue-800">
-                                                        <span className="text-xs font-bold text-blue-400 flex items-center gap-2">
-                                                            <MapPin size={12} />
-                                                            ENDEREÇOS DE COLETA RECENTES
-                                                        </span>
-                                                    </div>
-                                                    {recentPickupAddresses.map((address, addrIdx) => (
-                                                        <button
-                                                            key={addrIdx}
-                                                            type="button"
-                                                            onClick={() => {
-                                                                handleAddressChange('pickup', idx, address);
-                                                                setShowPickupAddressList(null);
-                                                            }}
-                                                            className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-700 text-slate-200 border-b border-slate-700 last:border-0 flex items-start gap-2"
-                                                        >
-                                                            <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 flex-shrink-0"></div>
-                                                            <span className="line-clamp-2">{address}</span>
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            )}
-
-                                            {/* BOTÃO COLAR ENDEREÇO CLIENTE */}
-                                            {client.address && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleAddressChange('pickup', idx, client.address || '')}
-                                                    className="absolute right-14 top-1.5 px-2 py-1 bg-blue-900/50 hover:bg-blue-800/50 text-blue-400 text-xs rounded-md flex items-center gap-1 transition-colors border border-blue-700 z-10"
-                                                    title="Copiar endereço do cadastro"
-                                                >
-                                                    <Building size={12} />
-                                                    Cliente
-                                                </button>
-                                            )}
-
-                                            {pickupAddresses.length > 1 && <button type="button" onClick={() => handleRemoveAddress('pickup', idx)} className="absolute right-2 top-2.5 z-10"><X size={16} className="text-red-400" /></button>}
-                                        </div>
-                                    ))}
-                                    <button type="button" onClick={() => handleAddAddress('pickup')} className="text-xs font-bold text-blue-400 flex items-center gap-1 mt-1"><Plus size={14} /> Adicionar Parada</button>
-                                </div>
-                                <div className="space-y-3 p-4 bg-emerald-900/10 rounded-xl border border-emerald-900/30">
-                                    <div className="flex items-center justify-between">
-                                        <h3 className="font-bold text-emerald-400 text-sm flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-500"></div> Entrega</h3>
-                                        {recentDeliveryAddresses.length > 0 && (
-                                            <span className="text-[10px] text-emerald-400">{recentDeliveryAddresses.length} endereço(s) salvo(s)</span>
-                                        )}
+                                        ))}
+                                        <button type="button" onClick={() => handleAddAddress('pickup')} className="text-xs font-bold text-blue-400 flex items-center gap-1 mt-1"><Plus size={14} /> Adicionar Parada</button>
                                     </div>
-                                    {deliveryAddresses.map((addr, idx) => (
-                                        <div key={idx} className="relative">
-                                            <div className="flex gap-2">
-                                                <div className="flex-1">
-                                                    <AddressAutocomplete
-                                                        value={addr}
-                                                        onChange={(value) => handleAddressChange('delivery', idx, value)}
-                                                        placeholder="Endereço de destino"
-                                                        iconColor="emerald"
-                                                    />
+                                    <div className="space-y-3 p-4 bg-emerald-900/10 rounded-xl border border-emerald-900/30">
+                                        <div className="flex items-center justify-between">
+                                            <h3 className="font-bold text-emerald-400 text-sm flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-500"></div> Entrega</h3>
+                                            {recentDeliveryAddresses.length > 0 && (
+                                                <span className="text-[10px] text-emerald-400">{recentDeliveryAddresses.length} endereço(s) salvo(s)</span>
+                                            )}
+                                        </div>
+                                        {deliveryAddresses.map((addr, idx) => (
+                                            <div key={idx} className="relative">
+                                                <div className="flex gap-2">
+                                                    <div className="flex-1">
+                                                        <AddressAutocomplete
+                                                            value={addr}
+                                                            onChange={(value) => handleAddressChange('delivery', idx, value)}
+                                                            placeholder="Endereço de destino"
+                                                            iconColor="emerald"
+                                                        />
+                                                    </div>
+
+                                                    {/* BOTÃO LISTA DE ENDEREÇOS RECENTES */}
+                                                    {recentDeliveryAddresses.length > 0 && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setShowDeliveryAddressList(showDeliveryAddressList === idx ? null : idx)}
+                                                            className="p-2.5 bg-emerald-900/30 text-emerald-400 rounded-lg border border-emerald-800 hover:bg-emerald-800/50 transition-colors flex-shrink-0"
+                                                            title="Ver endereços recentes"
+                                                        >
+                                                            <MapPin size={18} />
+                                                        </button>
+                                                    )}
                                                 </div>
 
-                                                {/* BOTÃO LISTA DE ENDEREÇOS RECENTES */}
-                                                {recentDeliveryAddresses.length > 0 && (
+                                                {/* DROPDOWN DE ENDEREÇOS RECENTES */}
+                                                {showDeliveryAddressList === idx && (
+                                                    <div className="absolute z-20 w-full bg-slate-800 border border-slate-600 rounded-lg shadow-xl mt-1 max-h-48 overflow-y-auto animate-fade-in custom-scrollbar">
+                                                        <div className="sticky top-0 bg-emerald-900/30 px-3 py-2 border-b border-emerald-800">
+                                                            <span className="text-xs font-bold text-emerald-400 flex items-center gap-2">
+                                                                <MapPin size={12} />
+                                                                ENDEREÇOS DE ENTREGA RECENTES
+                                                            </span>
+                                                        </div>
+                                                        {recentDeliveryAddresses.map((address, addrIdx) => (
+                                                            <button
+                                                                key={addrIdx}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    handleAddressChange('delivery', idx, address);
+                                                                    setShowDeliveryAddressList(null);
+                                                                }}
+                                                                className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-700 text-slate-200 border-b border-slate-700 last:border-0 flex items-start gap-2"
+                                                            >
+                                                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1.5 flex-shrink-0"></div>
+                                                                <span className="line-clamp-2">{address}</span>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+
+                                                {/* BOTÃO COLAR ENDEREÇO CLIENTE */}
+                                                {client.address && (
                                                     <button
                                                         type="button"
-                                                        onClick={() => setShowDeliveryAddressList(showDeliveryAddressList === idx ? null : idx)}
-                                                        className="p-2.5 bg-emerald-900/30 text-emerald-400 rounded-lg border border-emerald-800 hover:bg-emerald-800/50 transition-colors flex-shrink-0"
-                                                        title="Ver endereços recentes"
+                                                        onClick={() => handleAddressChange('delivery', idx, client.address || '')}
+                                                        className="absolute right-14 top-1.5 px-2 py-1 bg-emerald-900/50 hover:bg-emerald-800/50 text-emerald-400 text-xs rounded-md flex items-center gap-1 transition-colors border border-emerald-700 z-10"
+                                                        title="Copiar endereço do cadastro"
                                                     >
-                                                        <MapPin size={18} />
+                                                        <Building size={12} />
+                                                        Cliente
                                                     </button>
                                                 )}
+
+                                                {deliveryAddresses.length > 1 && <button type="button" onClick={() => handleRemoveAddress('delivery', idx)} className="absolute right-2 top-2.5 z-10"><X size={16} className="text-red-400" /></button>}
                                             </div>
-
-                                            {/* DROPDOWN DE ENDEREÇOS RECENTES */}
-                                            {showDeliveryAddressList === idx && (
-                                                <div className="absolute z-20 w-full bg-slate-800 border border-slate-600 rounded-lg shadow-xl mt-1 max-h-48 overflow-y-auto animate-fade-in custom-scrollbar">
-                                                    <div className="sticky top-0 bg-emerald-900/30 px-3 py-2 border-b border-emerald-800">
-                                                        <span className="text-xs font-bold text-emerald-400 flex items-center gap-2">
-                                                            <MapPin size={12} />
-                                                            ENDEREÇOS DE ENTREGA RECENTES
-                                                        </span>
-                                                    </div>
-                                                    {recentDeliveryAddresses.map((address, addrIdx) => (
-                                                        <button
-                                                            key={addrIdx}
-                                                            type="button"
-                                                            onClick={() => {
-                                                                handleAddressChange('delivery', idx, address);
-                                                                setShowDeliveryAddressList(null);
-                                                            }}
-                                                            className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-700 text-slate-200 border-b border-slate-700 last:border-0 flex items-start gap-2"
-                                                        >
-                                                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1.5 flex-shrink-0"></div>
-                                                            <span className="line-clamp-2">{address}</span>
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            )}
-
-                                            {/* BOTÃO COLAR ENDEREÇO CLIENTE */}
-                                            {client.address && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleAddressChange('delivery', idx, client.address || '')}
-                                                    className="absolute right-14 top-1.5 px-2 py-1 bg-emerald-900/50 hover:bg-emerald-800/50 text-emerald-400 text-xs rounded-md flex items-center gap-1 transition-colors border border-emerald-700 z-10"
-                                                    title="Copiar endereço do cadastro"
-                                                >
-                                                    <Building size={12} />
-                                                    Cliente
-                                                </button>
-                                            )}
-
-                                            {deliveryAddresses.length > 1 && <button type="button" onClick={() => handleRemoveAddress('delivery', idx)} className="absolute right-2 top-2.5 z-10"><X size={16} className="text-red-400" /></button>}
-                                        </div>
-                                    ))}
-                                    <button type="button" onClick={() => handleAddAddress('delivery')} className="text-xs font-bold text-emerald-400 flex items-center gap-1 mt-1"><Plus size={14} /> Adicionar Parada</button>
+                                        ))}
+                                        <button type="button" onClick={() => handleAddAddress('delivery')} className="text-xs font-bold text-emerald-400 flex items-center gap-1 mt-1"><Plus size={14} /> Adicionar Parada</button>
+                                    </div>
                                 </div>
-                            </div>
 
-                            {/* Box de Distância Total */}
-                            {(totalDistance > 0 || isCalculatingDistance) && (
-                                <div className="p-4 bg-purple-900/20 rounded-xl border border-purple-800/50 flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-full bg-purple-800/50 flex items-center justify-center">
-                                            <Navigation size={20} className="text-purple-400" />
+                                {/* Box de Distância Total */}
+                                {(totalDistance > 0 || isCalculatingDistance) && (
+                                    <div className="p-4 bg-purple-900/20 rounded-xl border border-purple-800/50 flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-full bg-purple-800/50 flex items-center justify-center">
+                                                <Navigation size={20} className="text-purple-400" />
+                                            </div>
+                                            <div>
+                                                <span className="block text-xs font-bold text-purple-400 uppercase">Distância Total do Roteiro</span>
+                                                <span className="text-sm text-purple-300/70">Cálculo automático via Mapbox</span>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            {isCalculatingDistance ? (
+                                                <div className="flex items-center gap-2 text-purple-400">
+                                                    <Loader2 size={18} className="animate-spin" />
+                                                    <span className="text-sm font-medium">Calculando...</span>
+                                                </div>
+                                            ) : (
+                                                <span className="text-2xl font-bold text-purple-300">{totalDistance.toFixed(1)} km</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Financeiro - Padronizado */}
+                                <div className="pt-4 border-t border-slate-700">
+                                    <h3 className="font-bold text-white mb-4 text-sm border-b border-slate-700 pb-2">Financeiro e Adicionais</h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                        <div>
+                                            <label className="block text-xs font-bold text-emerald-400 mb-1">Valor da Corrida (R$)</label>
+                                            <div className="relative">
+                                                <DollarSign size={16} className="absolute left-3 top-3 text-emerald-500" />
+                                                <input required type="number" step="0.01" className="w-full pl-9 p-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white font-bold text-lg focus:border-emerald-500 outline-none" value={cost} onChange={e => setCost(e.target.value)} placeholder="0.00" />
+                                            </div>
                                         </div>
                                         <div>
-                                            <span className="block text-xs font-bold text-purple-400 uppercase">Distância Total do Roteiro</span>
-                                            <span className="text-sm text-purple-300/70">Cálculo automático via Mapbox</span>
+                                            <label className="block text-xs font-bold text-red-400 mb-1">Pago ao Motoboy (R$)</label>
+                                            <div className="relative">
+                                                <Bike size={16} className="absolute left-3 top-3 text-red-500" />
+                                                <input required type="number" step="0.01" className="w-full pl-9 p-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white font-bold text-lg focus:border-red-500 outline-none" value={driverFee} onChange={e => setDriverFee(e.target.value)} placeholder="0.00" />
+                                            </div>
                                         </div>
                                     </div>
-                                    <div className="text-right">
-                                        {isCalculatingDistance ? (
-                                            <div className="flex items-center gap-2 text-purple-400">
-                                                <Loader2 size={18} className="animate-spin" />
-                                                <span className="text-sm font-medium">Calculando...</span>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase">VALOR ESPERA (R$)</label>
+                                            <div className="relative">
+                                                <Timer size={14} className="absolute left-3 top-3 text-slate-500" />
+                                                <input type="number" step="0.01" className="w-full pl-9 p-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:border-blue-500 outline-none" value={waitingTime} onChange={e => setWaitingTime(e.target.value)} placeholder="0.00" />
                                             </div>
-                                        ) : (
-                                            <span className="text-2xl font-bold text-purple-300">{totalDistance.toFixed(1)} km</span>
+                                            <p className="text-[10px] text-slate-500 mt-1">Soma no total do sistema</p>
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase">TAXA EXTRA (R$)</label>
+                                            <div className="relative">
+                                                <DollarSign size={14} className="absolute left-3 top-3 text-slate-500" />
+                                                <input type="number" step="0.01" className="w-full pl-9 p-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:border-blue-500 outline-none" value={extraFee} onChange={e => setExtraFee(e.target.value)} placeholder="0.00" />
+                                            </div>
+                                            <p className="text-[10px] text-slate-500 mt-1">Soma apenas no PDF do Cliente</p>
+                                        </div>
+                                    </div>
+                                    {/* BOX TOTAIS */}
+                                    <div className="p-4 bg-slate-800 rounded-lg flex justify-between items-center border border-slate-700">
+                                        <div>
+                                            <span className="block text-[10px] font-bold text-slate-400 uppercase">TOTAL INTERNO (BASE + ESPERA)</span>
+                                            <span className="text-xl font-bold text-white">R$ {currentTotal.toFixed(2)}</span>
+                                        </div>
+                                        <div className="text-right">
+                                            <span className="block text-[10px] font-bold text-slate-500 uppercase">TOTAL NO PDF CLIENTE (+ TAXA)</span>
+                                            <span className="text-sm font-bold text-slate-300">R$ {pdfTotal.toFixed(2)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Solicitante & Pagamento */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="relative">
+                                        <label className="block text-sm font-bold text-slate-300 mb-1">Solicitante</label>
+                                        <div className="flex gap-2">
+                                            <div className="relative flex-1">
+                                                <input
+                                                    required
+                                                    className="w-full p-2.5 border border-slate-700 rounded-lg bg-slate-800 text-white focus:ring-2 focus:ring-blue-600 outline-none"
+                                                    value={requester}
+                                                    onChange={e => setRequester(e.target.value)}
+                                                    placeholder="Nome do funcionário"
+                                                    autoComplete="off"
+                                                />
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowRequesterList(!showRequesterList)}
+                                                className="p-2.5 bg-blue-900/30 text-blue-400 rounded-lg border border-blue-800 hover:bg-blue-800/50 transition-colors"
+                                                title="Ver Lista de Solicitantes"
+                                            >
+                                                <List size={20} />
+                                            </button>
+                                        </div>
+
+                                        {/* DROPDOWN MANUAL (INTERNO) */}
+                                        {showRequesterList && (
+                                            <div className="absolute z-10 w-full bg-slate-800 border border-slate-600 rounded-lg shadow-xl mt-1 max-h-48 overflow-y-auto animate-fade-in custom-scrollbar">
+                                                {requesterSuggestions.length === 0 ? (
+                                                    <div className="p-3 text-xs text-slate-400 text-center">Nenhum solicitante encontrado.</div>
+                                                ) : (
+                                                    requesterSuggestions.map((name, idx) => (
+                                                        <button
+                                                            key={idx}
+                                                            type="button"
+                                                            onClick={() => { setRequester(name); setShowRequesterList(false); }}
+                                                            className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-700 text-slate-200 border-b border-slate-700 last:border-0 flex items-center gap-2"
+                                                        >
+                                                            <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+                                                            {name}
+                                                        </button>
+                                                    ))
+                                                )}
+                                            </div>
                                         )}
                                     </div>
-                                </div>
-                            )}
 
-                            {/* Financeiro - Padronizado */}
-                            <div className="pt-4 border-t border-slate-700">
-                                <h3 className="font-bold text-white mb-4 text-sm border-b border-slate-700 pb-2">Financeiro e Adicionais</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                    <div>
-                                        <label className="block text-xs font-bold text-emerald-400 mb-1">Valor da Corrida (R$)</label>
-                                        <div className="relative">
-                                            <DollarSign size={16} className="absolute left-3 top-3 text-emerald-500" />
-                                            <input required type="number" step="0.01" className="w-full pl-9 p-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white font-bold text-lg focus:border-emerald-500 outline-none" value={cost} onChange={e => setCost(e.target.value)} placeholder="0.00" />
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-bold text-red-400 mb-1">Pago ao Motoboy (R$)</label>
-                                        <div className="relative">
-                                            <Bike size={16} className="absolute left-3 top-3 text-red-500" />
-                                            <input required type="number" step="0.01" className="w-full pl-9 p-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white font-bold text-lg focus:border-red-500 outline-none" value={driverFee} onChange={e => setDriverFee(e.target.value)} placeholder="0.00" />
+                                    <div className="p-3 border border-slate-700 rounded-xl">
+                                        <div className="grid grid-cols-3 gap-2">
+                                            {(['PIX', 'CASH', 'CARD'] as PaymentMethod[]).map(m => (
+                                                <button key={m} type="button" onClick={() => setPaymentMethod(m)} className={`flex items-center justify-center py-2 rounded-lg border text-xs font-bold ${paymentMethod === m ? 'bg-blue-600 text-white border-blue-600' : 'bg-transparent border-slate-600 text-slate-400 hover:border-slate-400'}`}>{m}</button>
+                                            ))}
                                         </div>
                                     </div>
                                 </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                    <div>
-                                        <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase">VALOR ESPERA (R$)</label>
-                                        <div className="relative">
-                                            <Timer size={14} className="absolute left-3 top-3 text-slate-500" />
-                                            <input type="number" step="0.01" className="w-full pl-9 p-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:border-blue-500 outline-none" value={waitingTime} onChange={e => setWaitingTime(e.target.value)} placeholder="0.00" />
-                                        </div>
-                                        <p className="text-[10px] text-slate-500 mt-1">Soma no total do sistema</p>
-                                    </div>
-                                    <div>
-                                        <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase">TAXA EXTRA (R$)</label>
-                                        <div className="relative">
-                                            <DollarSign size={14} className="absolute left-3 top-3 text-slate-500" />
-                                            <input type="number" step="0.01" className="w-full pl-9 p-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:border-blue-500 outline-none" value={extraFee} onChange={e => setExtraFee(e.target.value)} placeholder="0.00" />
-                                        </div>
-                                        <p className="text-[10px] text-slate-500 mt-1">Soma apenas no PDF do Cliente</p>
-                                    </div>
-                                </div>
-                                {/* BOX TOTAIS */}
-                                <div className="p-4 bg-slate-800 rounded-lg flex justify-between items-center border border-slate-700">
-                                    <div>
-                                        <span className="block text-[10px] font-bold text-slate-400 uppercase">TOTAL INTERNO (BASE + ESPERA)</span>
-                                        <span className="text-xl font-bold text-white">R$ {currentTotal.toFixed(2)}</span>
-                                    </div>
-                                    <div className="text-right">
-                                        <span className="block text-[10px] font-bold text-slate-500 uppercase">TOTAL NO PDF CLIENTE (+ TAXA)</span>
-                                        <span className="text-sm font-bold text-slate-300">R$ {pdfTotal.toFixed(2)}</span>
-                                    </div>
-                                </div>
-                            </div>
 
-                            {/* Solicitante & Pagamento */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="relative">
-                                    <label className="block text-sm font-bold text-slate-300 mb-1">Solicitante</label>
-                                    <div className="flex gap-2">
-                                        <div className="relative flex-1">
-                                            <input
-                                                required
-                                                className="w-full p-2.5 border border-slate-700 rounded-lg bg-slate-800 text-white focus:ring-2 focus:ring-blue-600 outline-none"
-                                                value={requester}
-                                                onChange={e => setRequester(e.target.value)}
-                                                placeholder="Nome do funcionário"
-                                                autoComplete="off"
-                                            />
+                                <div className="p-4 border border-slate-700 rounded-xl flex items-center justify-center">
+                                    <label className="flex items-center gap-3 cursor-pointer">
+                                        <div className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-all ${isPaid ? 'bg-emerald-500 border-emerald-500' : 'border-slate-500'}`}>
+                                            {isPaid && <CheckCircle size={14} className="text-white" />}
                                         </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowRequesterList(!showRequesterList)}
-                                            className="p-2.5 bg-blue-900/30 text-blue-400 rounded-lg border border-blue-800 hover:bg-blue-800/50 transition-colors"
-                                            title="Ver Lista de Solicitantes"
-                                        >
-                                            <List size={20} />
-                                        </button>
-                                    </div>
-
-                                    {/* DROPDOWN MANUAL (INTERNO) */}
-                                    {showRequesterList && (
-                                        <div className="absolute z-10 w-full bg-slate-800 border border-slate-600 rounded-lg shadow-xl mt-1 max-h-48 overflow-y-auto animate-fade-in custom-scrollbar">
-                                            {requesterSuggestions.length === 0 ? (
-                                                <div className="p-3 text-xs text-slate-400 text-center">Nenhum solicitante encontrado.</div>
-                                            ) : (
-                                                requesterSuggestions.map((name, idx) => (
-                                                    <button
-                                                        key={idx}
-                                                        type="button"
-                                                        onClick={() => { setRequester(name); setShowRequesterList(false); }}
-                                                        className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-700 text-slate-200 border-b border-slate-700 last:border-0 flex items-center gap-2"
-                                                    >
-                                                        <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
-                                                        {name}
-                                                    </button>
-                                                ))
-                                            )}
-                                        </div>
-                                    )}
+                                        <input type="checkbox" className="hidden" checked={isPaid} onChange={e => setIsPaid(e.target.checked)} />
+                                        <span className="text-sm font-bold text-slate-300">Status do Pagamento: {isPaid ? 'Pago' : 'Pendente'}</span>
+                                    </label>
                                 </div>
 
-                                <div className="p-3 border border-slate-700 rounded-xl">
-                                    <div className="grid grid-cols-3 gap-2">
-                                        {(['PIX', 'CASH', 'CARD'] as PaymentMethod[]).map(m => (
-                                            <button key={m} type="button" onClick={() => setPaymentMethod(m)} className={`flex items-center justify-center py-2 rounded-lg border text-xs font-bold ${paymentMethod === m ? 'bg-blue-600 text-white border-blue-600' : 'bg-transparent border-slate-600 text-slate-400 hover:border-slate-400'}`}>{m}</button>
-                                        ))}
-                                    </div>
+                                <div className="pt-4 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-3">
+                                    <button type="button" onClick={resetForm} className="px-4 py-2 font-bold text-slate-600 hover:text-white">Cancelar</button>
+                                    <button type="submit" disabled={isSubmitting} className="bg-emerald-600 text-white px-8 py-2 rounded-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed">
+                                        {isSubmitting ? 'Salvando...' : 'Salvar'}
+                                    </button>
                                 </div>
-                            </div>
-
-                            <div className="p-4 border border-slate-700 rounded-xl flex items-center justify-center">
-                                <label className="flex items-center gap-3 cursor-pointer">
-                                    <div className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-all ${isPaid ? 'bg-emerald-500 border-emerald-500' : 'border-slate-500'}`}>
-                                        {isPaid && <CheckCircle size={14} className="text-white" />}
-                                    </div>
-                                    <input type="checkbox" className="hidden" checked={isPaid} onChange={e => setIsPaid(e.target.checked)} />
-                                    <span className="text-sm font-bold text-slate-300">Status do Pagamento: {isPaid ? 'Pago' : 'Pendente'}</span>
-                                </label>
-                            </div>
-
-                            <div className="pt-4 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-3">
-                                <button type="button" onClick={resetForm} className="px-4 py-2 font-bold text-slate-600 hover:text-white">Cancelar</button>
-                                <button type="submit" disabled={isSubmitting} className="bg-emerald-600 text-white px-8 py-2 rounded-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed">
-                                    {isSubmitting ? 'Salvando...' : 'Salvar'}
-                                </button>
-                            </div>
-                        </form>
+                            </form>
+                        </div>
                     )}
                 </>
             )}
@@ -1521,7 +1530,7 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialCli
                                     </td>
                                 </tr>
                             ) : (
-                                filteredServices.map(service => {
+                                paginatedServices.map(service => {
                                     const internalTotal = service.cost + (service.waitingTime || 0);
                                     const profit = internalTotal - (service.driverFee || 0);
                                     const isSelected = selectedIds.has(service.id);
@@ -1686,6 +1695,24 @@ export const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialCli
                         </tbody>
                     </table>
                 </div>
+
+                {/* Pagination Info & Load More Button */}
+                {filteredServices.length > 0 && (
+                    <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 flex flex-col sm:flex-row items-center justify-between gap-3">
+                        <span className="text-sm text-slate-600 dark:text-slate-400">
+                            Mostrando <strong className="text-slate-800 dark:text-white">{Math.min(visibleCount, filteredServices.length)}</strong> de <strong className="text-slate-800 dark:text-white">{filteredServices.length}</strong> serviços
+                        </span>
+                        {hasMoreServices && (
+                            <button
+                                onClick={() => setVisibleCount(prev => prev + ITEMS_PER_PAGE)}
+                                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-sm transition-colors flex items-center gap-2"
+                            >
+                                <ChevronDown size={18} />
+                                Carregar mais {Math.min(ITEMS_PER_PAGE, filteredServices.length - visibleCount)} serviços
+                            </button>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     );
