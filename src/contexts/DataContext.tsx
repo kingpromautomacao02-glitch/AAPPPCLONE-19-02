@@ -95,9 +95,24 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     // Carrega dados automaticamente quando o usuário muda
     useEffect(() => {
         if (user && !hasLoadedInitialData) {
-            refreshData().then(() => {
-                setHasLoadedInitialData(true);
-            });
+            // Carrega dados em background sem bloquear a UI
+            const loadData = async () => {
+                try {
+                    // Add timeout to prevent hanging
+                    const dataPromise = refreshData();
+                    const timeoutPromise = new Promise((_, reject) => {
+                        setTimeout(() => reject(new Error('Data load timeout')), 5000);
+                    });
+
+                    await Promise.race([dataPromise, timeoutPromise]);
+                } catch (error) {
+                    console.error('DataContext: Timeout or error loading data', error);
+                } finally {
+                    setHasLoadedInitialData(true);
+                }
+            };
+
+            loadData();
         } else if (!user) {
             setClients([]);
             setServices([]);

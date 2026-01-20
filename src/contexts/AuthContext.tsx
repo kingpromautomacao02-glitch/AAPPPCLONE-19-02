@@ -20,19 +20,39 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // --- Helper: Fetch user profile from 'users' table ---
-// --- Helper: Fetch user profile from 'users' table ---
 const fetchUserProfile = async (authUser: SupabaseUser): Promise<User | null> => {
   try {
-    const { data, error } = await supabase
+    // Add timeout to prevent hanging
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Profile fetch timeout')), 3000);
+    });
+
+    const fetchPromise = supabase
       .from('users')
       .select('*')
       .eq('id', authUser.id)
-      .single();
+      .maybeSingle();
+
+    const result = await Promise.race([fetchPromise, timeoutPromise]) as any;
+    const { data, error } = result;
 
     if (error) {
       console.warn("Erro ao buscar perfil:", error.message);
 
       // Fallback básico se não encontrar no banco (mas autenticado no Supabase)
+      return {
+        id: authUser.id,
+        name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'Usuário',
+        email: authUser.email || '',
+        phone: authUser.phone || '',
+        role: 'USER',
+        status: 'ACTIVE',
+      } as User;
+    }
+
+    if (!data) {
+      // No profile found - return basic user
+      console.warn("Perfil não encontrado para usuário autenticado");
       return {
         id: authUser.id,
         name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'Usuário',
@@ -57,7 +77,15 @@ const fetchUserProfile = async (authUser: SupabaseUser): Promise<User | null> =>
 
   } catch (err) {
     console.error("Erro inesperado em fetchUserProfile:", err);
-    return null;
+    // Return basic fallback on any error
+    return {
+      id: authUser.id,
+      name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'Usuário',
+      email: authUser.email || '',
+      phone: authUser.phone || '',
+      role: 'USER',
+      status: 'ACTIVE',
+    } as User;
   }
 };
 
@@ -83,24 +111,47 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   // Initialize auth state on mount (RUNS ONLY ONCE)
   useEffect(() => {
     let isMounted = true;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
     const initAuth = async () => {
       console.log("Iniciando initAuth...");
+
+      // Safety timeout: force loading to end after 5 seconds
+      timeoutId = setTimeout(() => {
+        if (isMounted) {
+          console.warn("AuthContext: Timeout de inicialização. Forçando fim do loading.");
+          setLoading(false);
+        }
+      }, 5000);
+
       try {
-        const { data: { session }, error } = await supabase.auth.getSession();
+        // Add timeout to getSession call
+        const sessionPromise = supabase.auth.getSession();
+        const timeoutSessionPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('getSession timeout')), 3000);
+        });
+
+        const result = await Promise.race([sessionPromise, timeoutSessionPromise]) as any;
+        const { data: { session }, error } = result;
 
         if (error) {
           console.error("Erro ao pegar sessão:", error);
+          // Don't block - continue without session
         }
 
-        if (session?.user) {
+        if (session?.user && isMounted) {
           console.log("Sessão inicial encontrada:", session.user.email);
           setSession(session);
           setSupabaseUser(session.user);
 
-          if (isMounted) {
+          try {
             const profile = await fetchUserProfile(session.user);
-            setUser(profile);
+            if (isMounted) {
+              setUser(profile);
+            }
+          } catch (profileError) {
+            console.error("Erro ao carregar perfil:", profileError);
+            // Continue with basic user info
           }
         } else {
           console.log("Nenhuma sessão inicial.");
@@ -108,6 +159,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       } catch (err) {
         console.error("Erro fatal em initAuth:", err);
       } finally {
+        if (timeoutId) clearTimeout(timeoutId);
         if (isMounted) setLoading(false);
       }
     };
@@ -139,6 +191,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
     return () => {
       isMounted = false;
+      if (timeoutId) clearTimeout(timeoutId);
       subscription.unsubscribe();
     };
   }, []);

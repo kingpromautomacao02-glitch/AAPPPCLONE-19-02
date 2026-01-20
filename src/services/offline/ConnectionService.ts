@@ -33,10 +33,10 @@ class ConnectionService {
     }
 
     private startPingCheck(): void {
-        // Check connection every 30 seconds
+        // Check connection every 60 seconds (reduced frequency)
         this.pingInterval = setInterval(() => {
             this.checkConnection();
-        }, 30000);
+        }, 60000);
     }
 
     async checkConnection(): Promise<boolean> {
@@ -48,9 +48,16 @@ class ConnectionService {
 
         // If we have a ping URL, verify actual connectivity
         if (this.pingUrl) {
+            let controller: AbortController | null = null;
+            let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
             try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 5000);
+                controller = new AbortController();
+                timeoutId = setTimeout(() => {
+                    if (controller) {
+                        controller.abort();
+                    }
+                }, 2000);
 
                 // Use /rest/v1/ endpoint which returns a valid response
                 const pingEndpoint = this.pingUrl.endsWith('/')
@@ -63,14 +70,31 @@ class ConnectionService {
                     signal: controller.signal
                 });
 
-                clearTimeout(timeoutId);
+                if (timeoutId) {
+                    clearTimeout(timeoutId);
+                    timeoutId = null;
+                }
+
                 // If we got here, server is reachable
                 this.handleConnectionChange(true);
                 return true;
-            } catch (error) {
+            } catch (error: any) {
+                // Clear timeout if error occurs
+                if (timeoutId) {
+                    clearTimeout(timeoutId);
+                }
+
+                // Handle specific error types
+                if (error.name === 'AbortError') {
+                    // Timeout or abort - trust navigator.onLine
+                    if (navigator.onLine) {
+                        this.handleConnectionChange(true);
+                        return true;
+                    }
+                }
+
                 // Network error - but don't mark as offline just because ping failed
                 // The server might be reachable for auth but not for REST
-                console.warn('ConnectionService: Ping failed, trusting navigator.onLine');
                 // Trust navigator.onLine instead of marking offline
                 if (navigator.onLine) {
                     this.handleConnectionChange(true);
