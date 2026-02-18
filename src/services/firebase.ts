@@ -3,7 +3,7 @@ import { getAuth } from "firebase/auth";
 import { getAnalytics } from "firebase/analytics";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAjb3XUzyx9_H8FQTvWk8eFlemi0jr3t4k",
+  apiKey: "",
   authDomain: "motoboy-d5137.firebaseapp.com",
   projectId: "motoboy-d5137",
   storageBucket: "motoboy-d5137.firebasestorage.app",
