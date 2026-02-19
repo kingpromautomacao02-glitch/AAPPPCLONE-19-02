@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { User } from '../types';
-import { updateUserProfile } from '../services/storageService';
 import { useAuth } from '../contexts/AuthContext';
 import { Save, Building2, User as UserIcon, Mail, Phone, MapPin, CheckCircle, Lock, Shield } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface SettingsProps {
   currentUser: User;
@@ -10,7 +10,7 @@ interface SettingsProps {
 }
 
 export const Settings: React.FC<SettingsProps> = ({ currentUser, onUpdateUser }) => {
-  const { updatePassword } = useAuth();
+  const { updatePassword, updateProfile } = useAuth();
   const [name, setName] = useState(currentUser.name);
   const [phone, setPhone] = useState(currentUser.phone);
 
@@ -32,21 +32,29 @@ export const Settings: React.FC<SettingsProps> = ({ currentUser, onUpdateUser })
     e.preventDefault();
     setSuccess(false);
 
-    const updatedUser: User = {
-      ...currentUser,
-      name,
-      phone,
-      companyName,
-      companyCnpj,
-      companyAddress
-    };
+    try {
+      await updateProfile({
+        name,
+        phone,
+        companyName,
+        companyCnpj,
+        companyAddress
+      });
 
-    await updateUserProfile(updatedUser);
-    onUpdateUser(updatedUser);
-    setSuccess(true);
-
-    // Auto hide success message
-    setTimeout(() => setSuccess(false), 3000);
+      const updatedUser: User = {
+        ...currentUser,
+        name,
+        phone,
+        companyName,
+        companyCnpj,
+        companyAddress
+      };
+      onUpdateUser(updatedUser);
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 3000);
+    } catch (error: any) {
+      toast.error(error.message || 'Erro ao salvar alterações.');
+    }
   };
 
   const handlePasswordChange = async (e: React.FormEvent) => {

@@ -97,7 +97,7 @@ export class SupabaseAdapter implements DatabaseAdapter {
         };
 
         const { error } = await this.supabase.from('users').upsert(payload);
-        if (error) console.error("Erro ao salvar usuário:", error.message);
+        if (error) throw new Error(`Erro ao salvar usuário: ${error.message}`);
     }
 
     async updateUser(user: User): Promise<void> {
@@ -113,7 +113,7 @@ export class SupabaseAdapter implements DatabaseAdapter {
         };
 
         const { error } = await this.supabase.from('users').update(payload).eq('id', user.id);
-        if (error) console.error("Erro ao atualizar usuário:", error.message);
+        if (error) throw new Error(`Erro ao atualizar usuário: ${error.message}`);
     }
 
     async deleteUser(id: string): Promise<void> {
@@ -245,7 +245,7 @@ export class SupabaseAdapter implements DatabaseAdapter {
             deleted_at: service.deletedAt || null
         };
         const { error } = await this.supabase.from('services').upsert(payload);
-        if (error) console.error("Erro ao salvar serviço:", error.message);
+        if (error) throw new Error(`Erro ao salvar serviço: ${error.message}`);
     }
 
     async updateService(service: ServiceRecord, _user?: User): Promise<void> {
@@ -265,7 +265,8 @@ export class SupabaseAdapter implements DatabaseAdapter {
             total_distance: service.totalDistance,
             deleted_at: service.deletedAt || null
         };
-        await this.supabase.from('services').update(payload).eq('id', service.id);
+        const { error } = await this.supabase.from('services').update(payload).eq('id', service.id);
+        if (error) throw new Error(`Erro ao atualizar serviço: ${error.message}`);
     }
 
     async deleteService(id: string, _user?: User): Promise<void> {
@@ -312,7 +313,8 @@ export class SupabaseAdapter implements DatabaseAdapter {
             date: expense.date,
             description: expense.description
         };
-        await this.supabase.from('expenses').upsert(payload);
+        const { error } = await this.supabase.from('expenses').upsert(payload);
+        if (error) throw new Error(`Erro ao salvar despesa: ${error.message}`);
     }
 
     async deleteExpense(id: string): Promise<void> {

@@ -101,10 +101,15 @@ export const getUsers = async (): Promise<User[]> => {
 };
 
 export const updateUserProfile = async (user: User) => {
-  await dbAdapter.updateUser(user);
-  const current = getCurrentUser();
-  if (current && current.id === user.id) {
-    localStorage.setItem(STORAGE_KEYS.SESSION, JSON.stringify(user));
+  try {
+    await dbAdapter.updateUser(user);
+    const current = getCurrentUser();
+    if (current && current.id === user.id) {
+      localStorage.setItem(STORAGE_KEYS.SESSION, JSON.stringify(user));
+    }
+  } catch (error) {
+    console.error('Erro ao atualizar perfil:', error);
+    throw error;
   }
 };
 

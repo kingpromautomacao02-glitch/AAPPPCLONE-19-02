@@ -287,11 +287,13 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     if (!user) return;
 
     const payload: any = {};
-    if (updates.name) payload.name = updates.name;
-    if (updates.phone) payload.phone = updates.phone;
-    if (updates.companyName) payload.company_name = updates.companyName;
-    if (updates.companyAddress) payload.company_address = updates.companyAddress;
-    if (updates.companyCnpj) payload.company_cnpj = updates.companyCnpj;
+    if (updates.name !== undefined) payload.name = updates.name;
+    if (updates.phone !== undefined) payload.phone = updates.phone;
+    if (updates.companyName !== undefined) payload.company_name = updates.companyName;
+    if (updates.companyAddress !== undefined) payload.company_address = updates.companyAddress;
+    if (updates.companyCnpj !== undefined) payload.company_cnpj = updates.companyCnpj;
+
+    if (Object.keys(payload).length === 0) return;
 
     const { error } = await supabase
       .from('users')
@@ -303,7 +305,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       throw error;
     }
 
-    // Atualiza o estado global de forma segura
     setUser(prev => prev ? { ...prev, ...updates } : null);
   };
 
